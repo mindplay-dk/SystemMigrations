@@ -196,9 +196,10 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         $field = $event->argumentsByName('field');
 
         $data = $this->getFieldData($field);
-
+        
         $this->record('addField', array(
                 'name' => $data['name'],
+                'type' => $field->type->name,
                 'data' => $data)
         );
     }
@@ -240,9 +241,10 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
      * Adds a new Field
      *
      * @param string $name the name of the new Field
+     * @param string $type the Field type (class) name
      * @param array $data new properties and settings for the Field
      */
-    protected function addField($name, array $data)
+    protected function addField($name, $type, array $data)
     {
         // ...
     }
