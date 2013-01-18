@@ -1,0 +1,303 @@
+<?php
+
+/**
+ * ProcessWire System Migrations
+ *
+ * @author Rasmus Schultz
+ * @website http://blog.mindplay.dk/
+ * @license GPL v3
+ */
+
+/**
+ * System Migrations Module
+ */
+class SystemMigrations extends WireData implements Module, ConfigurableModule
+{
+    /**
+     * @return array module information
+     */
+    public static function getModuleInfo()
+    {
+        return array(
+            'title'      => 'Migrations',
+            'version'    => 100,
+            'summary'    => 'Records and integrates changes to Templates and Fields.',
+            'permission' => 'template-admin',
+            'href'       => 'https://github.com/mindplay-dk/SystemMigrations',
+            'singular'   => true,
+            'autoload'   => true,
+            'requires'   => array('ProcessField', 'ProcessTemplate'),
+        );
+    }
+
+    /**
+     * Initialize module settings.
+     */
+    public function __construct()
+    {
+        $this->addHookAfter('Fields::load', $this, 'hookFieldLoaded');
+        $this->addHookAfter('ProcessField::fieldSaved', $this, 'hookFieldSaved');
+        $this->addHookAfter('ProcessField::fieldAdded', $this, 'hookFieldAdded');
+        $this->addHookAfter('ProcessField::fieldDeleted', $this, 'hookFieldDeleted');
+
+        $this->data_path = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'data';
+    }
+
+    /**
+     * @var string path to data root-folder (where migration files are stored)
+     */
+    protected $data_path;
+
+    /**
+     * @var string file-name of the last migration read and applied
+     */
+    public $last_read;
+
+    /**
+     * @var string file-name of the last migration written
+     */
+    public $last_write;
+
+    /**
+     * Apply default configuration.
+     */
+    public function ___install()
+    {
+        // ...
+    }
+
+    /**
+     * @var string file-name to which the recorded set of migrations will be written
+     */
+    protected $filename;
+
+    /**
+     * @var array list of recorded function-calls, nested arrays like:
+     *            array('method' => $method, 'params' => $params)
+     */
+    protected $recorded = array();
+
+    /**
+     * Method to initialize the module.
+     *
+     * While the method is required, if you don't need it, then just leave the implementation blank.
+     *
+     * This is called after ProcessWire's API is fully ready for use and hooks. It is called at the end of the
+     * bootstrap process. This is before PW has started retrieving or rendering a page. If you need to have the
+     * API ready with the $page ready as well, then see the ready() method below this one.
+     */
+    public function init()
+    {
+        $this->filename = date('Y-m-d-H-i-s') . '.json';
+    }
+
+    /**
+     *
+      */
+    public function ready()
+    {
+        if ($this->page->template != 'admin') {
+            return;
+        }
+    }
+
+    /**
+     * Record a function-call as part of a migration
+     *
+     * @param string $method method-name
+     * @param array $params method arguments
+     */
+    protected function record($method, array $params)
+    {
+        $this->recorded[] = array('method' => $method, 'params' => $params);
+    }
+
+    /**
+     * Return an InputfieldsWrapper of Inputfields used to configure the class
+     *
+     * @param array $data Array of config values indexed by field name
+     *
+     * @return InputfieldsWrapper
+     */
+    public static function getModuleConfigInputfields(array $data)
+    {
+        // ...
+    }
+
+    /**
+     * @var array list of Field properties and settings at the time of loading
+     */
+    protected $old_data = array();
+
+    /**
+     * @param HookEvent $event
+     *
+     * @see WireSaveableItems::___load()
+     * @see Fields::___load()
+     */
+    public function hookFieldLoaded(HookEvent $event)
+    {
+        /**
+         * @var WireArray $fields
+         */
+
+        #$event->object
+
+        $fields = $event->argumentsByName('items');
+
+        foreach ($fields as $field) {
+            $this->old_data[$field->id] = $this->getFieldData($field);
+        }
+    }
+
+    /**
+     * @param HookEvent $event
+     *
+     * @see ProcessField::___fieldSaved()
+     */
+    public function hookFieldSaved(HookEvent $event)
+    {
+        /**
+         * @var Field $field
+         */
+
+        $field = $event->argumentsByName('field');
+
+        $data = $this->getFieldData($field);
+
+        $diff = array();
+
+        foreach ($this->old_data[$field->id] as $name => $value) {
+            if ($value !== $data[$name]) {
+                $diff[$name] = $data[$name];
+            }
+        }
+
+        if (count($diff)) {
+            $this->record('updateField', array(
+                    'name' => $this->old_data[$field->id]['name'],
+                    'data' => $diff)
+            );
+        }
+    }
+
+
+    /**
+     * @param HookEvent $event
+     *
+     * @see ProcessField::___fieldAdded()
+     */
+    public function hookFieldAdded(HookEvent $event)
+    {
+        /**
+         * @var Field $field
+         */
+
+        $field = $event->argumentsByName('field');
+
+        $data = $this->getFieldData($field);
+
+        $this->record('addField', array(
+                'name' => $data['name'],
+                'data' => $data)
+        );
+    }
+    
+    /**
+     * @param HookEvent $event
+     *
+     * @see ProcessField::___fieldSaved()
+     */
+    public function hookFieldDeleted(HookEvent $event)
+    {
+        /**
+         * @var Field $field
+         */
+
+        $field = $event->argumentsByName('field');
+
+        $data = $this->getFieldData($field);
+
+        $this->record('deleteField', array('name' => $data['name']));
+    }
+    
+    /**
+     * Apply updates to a Field
+     *
+     * The name is the preferred way to find an existing Field, since the ID could
+     * differ on another system. The name is the current name, before applying the
+     * update - if the field's name has changed, the new name is in $data['name']
+     *
+     * @param string $name the (current) name of the Field
+     * @param array $data new properties and settings for the Field
+     */
+    protected function updateField($name, array $data)
+    {
+        // ...
+    }
+
+    /**
+     * Adds a new Field
+     *
+     * @param string $name the name of the new Field
+     * @param array $data new properties and settings for the Field
+     */
+    protected function addField($name, array $data)
+    {
+        // ...
+    }
+
+    /**
+     * Deletes an existing Field
+     *
+     * @param string $name the name of the deleted Field
+     */
+    protected function deleteField($name)
+    {
+        // ...
+    }
+
+    /**
+     * Extract all important Field properties and settings
+     *
+     * @param Field $field
+     * @return array
+     */
+    protected function getFieldData(Field $field)
+    {
+        static $FIELD_SETTINGS = array(
+            'id',
+            'name',
+            'flags',
+            'label',
+            # 'type'
+            # 'prevTable',
+            # 'prevFieldtype'
+        );
+
+        $data = array();
+
+        foreach ($field as $name => $value) {
+            $data[$name] = $value;
+        }
+
+        foreach ($FIELD_SETTINGS as $name) {
+            $data[$name] = $field->{$name};
+        }
+
+        return $data;
+    }
+
+    /**
+     * Write recorded changes to a migration file.
+     */
+    public function __destruct()
+    {
+        if (count($this->recorded)) {
+            file_put_contents(
+                /* $filename: */ $this->data_path . DIRECTORY_SEPARATOR . $this->filename,
+                /* $data: */ json_encode($this->recorded)
+            );
+        }
+    }
+}
