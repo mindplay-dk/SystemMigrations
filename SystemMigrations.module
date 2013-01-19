@@ -162,7 +162,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
          */
 
         $field = $event->argumentsByName('field');
-
+        
         $data = $this->getFieldData($field);
 
         $diff = array();
@@ -267,25 +267,21 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
      */
     protected function getFieldData(Field $field)
     {
-        static $FIELD_SETTINGS = array(
-            'id',
-            'name',
-            'flags',
-            'label',
-            # 'type'
-            # 'prevTable',
-            # 'prevFieldtype'
-        );
-
         $data = array();
 
         foreach ($field as $name => $value) {
             $data[$name] = $value;
         }
-
-        foreach ($FIELD_SETTINGS as $name) {
-            $data[$name] = $field->{$name};
+        
+        $settings = $field->getTableData();
+        
+        unset($settings['data'], $settings['type'], $settings['prevTable'], $settings['prevFieldtype']);
+        
+        foreach ($settings as $name => $value) {
+            $data[$name] = $value;
         }
+        
+        $data['name'] = $field->name;
 
         return $data;
     }
