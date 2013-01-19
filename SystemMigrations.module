@@ -164,18 +164,26 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         $field = $event->argumentsByName('field');
         
         $data = $this->getFieldData($field);
+        
+        $old_data = $this->old_data[$field->id];
 
         $diff = array();
 
-        foreach ($this->old_data[$field->id] as $name => $value) {
-            if ($value !== $data[$name]) {
+        foreach ($old_data as $name => $value) {
+            if ($value != @$data[$name]) {
                 $diff[$name] = $data[$name];
             }
         }
-
+        
+        foreach ($data as $name => $value) {
+            if ($value != @$old_data[$name]) {
+                $diff[$name] = $value;
+            }
+        }
+        
         if (count($diff)) {
             $this->record('updateField', array(
-                    'name' => $this->old_data[$field->id]['name'],
+                    'name' => $old_data['name'],
                     'data' => $diff)
             );
         }
