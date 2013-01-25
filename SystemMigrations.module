@@ -43,7 +43,8 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     public static function getModuleInfo()
     {
         return array(
-            'title'      => 'Migrations',
+            'title'      => 'System Migrations (Core)',
+            'author'     => 'Rasmus Schultz',
             'version'    => 100,
             'summary'    => 'Records and integrates changes to Templates and Fields.',
             'permission' => 'template-admin',

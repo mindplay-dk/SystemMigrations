@@ -10,12 +10,11 @@ class SystemMigrationsAdmin extends Process
     public static function getModuleInfo()
     {
         return array(
-            'title'      => 'Migrations Admin',
+            'title'      => 'System Migrations',
+            'author'     => 'Rasmus Schultz',
             'version'    => 100,
-            'summary'    => 'Records and integrates changes to Templates and Fields.',
+            'summary'    => 'Administration module for the System Migrations module.',
             'permission' => 'template-admin',
-            'singular'   => true,
-            'autoload'   => true,
             'requires'   => array('SystemMigrations'),
         );
     }
@@ -37,12 +36,6 @@ class SystemMigrationsAdmin extends Process
      */
     public function ___execute()
     {
-        /**
-         * @var $fields InputfieldWrapper
-         * @var $default_icon InputfieldText
-         * @var $show_template InputfieldCheckbox
-         */
-
         $modules = Wire::getFuel('modules');
         
         $fields = new InputfieldWrapper();
