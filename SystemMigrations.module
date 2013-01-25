@@ -88,7 +88,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
      */
     public function init()
     {
-        $this->filename = date('Y-m-d-H-i-s') . '.json';
+        $this->filename = date('Y-m-d-H-i-s-') . substr(md5(rand(0,9999999).microtime(true)),0,8) . '.json';
     }
 
     /**
@@ -291,6 +291,12 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         
         $data['name'] = $field->name;
 
+        if (isset($data['columnWidth']) && ($data['columnWidth'] == 100)) {
+            // ignore default value, which won't get saved:
+            unset($data['columnWidth']);
+            // see Fields::___saveFieldgroupContext()
+        }
+        
         return $data;
     }
 
