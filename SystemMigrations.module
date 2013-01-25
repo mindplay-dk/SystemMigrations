@@ -10,6 +10,8 @@
 
 /**
  * System Migrations Module
+ *
+ * This module is responsible for recording changes to Fields and Templates.
  */
 class SystemMigrations extends WireData implements Module, ConfigurableModule
 {
@@ -43,7 +45,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     public static function getModuleInfo()
     {
         return array(
-            'title'      => 'System Migrations (Core)',
+            'title'      => 'Migrations',
             'author'     => 'Rasmus Schultz',
             'version'    => 100,
             'summary'    => 'Records and integrates changes to Templates and Fields.',
@@ -253,7 +255,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         
         $markup = wire('modules')->get('InputfieldMarkup');
         
-        $markup->markupText = '<h2>System Migrations</h2><p>Please select &quot;Migrations Admin&quot; from the &quot;Setup&quot; menu...</p>';
+        $markup->markupText = '<h2>System Migrations</h2><p>Please select &quot;Migrations&quot; from the &quot;Setup&quot; menu...</p>';
         
         $fields->append($markup);
 
