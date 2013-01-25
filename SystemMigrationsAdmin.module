@@ -20,10 +20,66 @@ class SystemMigrationsAdmin extends Process
         );
     }
     
+    /**
+     * Method to initialize the module.
+     *
+     * This is called after ProcessWire's API is fully ready for use and hooks. It is called at the end of the
+     * bootstrap process. This is before PW has started retrieving or rendering a page. If you need to have the
+     * API ready with the $page ready as well, then see the ready() method below this one.
+     */
+    public function init()
+    {
+        $this->data_path = wire('modules')->SystemMigrations->data_path;
+    }
+    
+    /**
+     * 
+     */
     public function ___execute()
     {
-        return '<h2>Foo</h2>';
+        /**
+         * @var $fields InputfieldWrapper
+         * @var $default_icon InputfieldText
+         * @var $show_template InputfieldCheckbox
+         */
+
+        $modules = Wire::getFuel('modules');
+        
+        $fields = new InputfieldWrapper();
+        
+        $html = "<h2>Migrations</h2>\n";
+        
+        $first = true;
+        
+        $count = 0; $max = 100;
+        
+        foreach ($this->getMigrations() as $filename => $installed) {
+            if (++$count > $max) {
+                $html .= "<pre>  More than $max migrations in registry...</pre>\n";
+                break;
+            }
+            
+            $html .= "<pre>" . ($installed ? '  ' : '* ') . htmlspecialchars($filename) . ' ' . htmlspecialchars($this->describe($filename));
+            
+            if (($installed === false) && $first) {
+                $first = false;
+                
+                $status = $this->canApply($filename);
+                
+                $html .= " <- " . ($status === true ? "READY" : $status);
+                
+                $html .= "</pre>\n";
+            }
+        }
+        
+        $markup = wire('modules')->get('InputfieldMarkup');
+        $markup->markupText = $html;
+        
+        $fields->append($markup);
+
+        return $fields->render();
     }
+    
     /**
      * Install the setup menu shortcut
      */
@@ -54,5 +110,127 @@ class SystemMigrationsAdmin extends Process
         if ($page->id) {
             $page->delete();
         }
+    }
+    
+    public function getMigrations()
+    {
+        return wire('modules')->SystemMigrations->getMigrations();
+    }
+    
+    /**
+     * Load data from a migration file
+     * @return array
+     */
+    protected function loadMigration($migration_filename)
+    {
+        return json_decode(file_get_contents($this->data_path . DIRECTORY_SEPARATOR . $migration_filename), true);
+    }
+    
+    /**
+     * @param string $migration_filename
+     */
+    public function canApply($migration_filename)
+    {
+        $items = $this->loadMigration($migration_filename);
+        
+        foreach ($items as $data) {
+            $fn = 'can' . ucfirst($data['method']);
+            
+            if (!isset($data['params'])) {
+                var_dump($data); die();
+            }
+        }
+        
+        return call_user_func_array(array($this, $fn), $data['params']);
+    }
+    
+    public function describe($migration_filename)
+    {
+        $items = $this->loadMigration($migration_filename);
+        
+        $strings = array();
+        
+        foreach ($items as $data) {
+            $string = array();
+            
+            foreach ($data['params'] as $name => $value) {
+                if (is_scalar($value)) {
+                    $string[] = $name . ':' . strval($value);
+                }
+            }
+            
+            $strings[] = $data['method'] . '(' . implode(' ', $string) . ')';
+        }
+        
+        return implode(', ', $strings);
+    }
+    
+    /**
+     * @return bool
+     */
+    protected function canUpdateField($name, array $data)
+    {
+        if (wire('fields')->$name === null) {
+            return "Undefined Field: $name";
+        }
+        
+        return true; // TODO
+    }
+    
+    /**
+     * Apply updates to a Field
+     *
+     * The name is the preferred way to find an existing Field, since the ID could
+     * differ on another system. The name is the current name, before applying the
+     * update - if the field's name has changed, the new name is in $data['name']
+     *
+     * @param string $name the (current) name of the Field
+     * @param array $data new properties and settings for the Field
+     */
+    protected function updateField($name, array $data)
+    {
+        // ...
+    }
+
+    /**
+     * @return bool
+     */
+    protected function canAddField($name, $type, array $data)
+    {
+        if (wire('fields')->$name) {
+            return "Field already exists: $name";
+        }
+        
+        return true; // TODO
+    }
+        
+    /**
+     * Adds a new Field
+     *
+     * @param string $name the name of the new Field
+     * @param string $type the Field type (class) name
+     * @param array $data new properties and settings for the Field
+     */
+    protected function addField($name, $type, array $data)
+    {
+        // ...
+    }
+    
+    /**
+     * @return bool
+     */
+    protected function canDeleteField($name)
+    {
+        return true;
+    }
+    
+    /**
+     * Deletes an existing Field
+     *
+     * @param string $name the name of the deleted Field
+     */
+    protected function deleteField($name)
+    {
+        // ...
     }
 }
