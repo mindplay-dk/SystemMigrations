@@ -1,0 +1,58 @@
+<?php
+
+class SystemMigrationsAdmin extends Process
+{ 
+    const PAGE_NAME = 'migrations';
+    
+    /**
+     * @return array module information
+     */
+    public static function getModuleInfo()
+    {
+        return array(
+            'title'      => 'Migrations Admin',
+            'version'    => 100,
+            'summary'    => 'Records and integrates changes to Templates and Fields.',
+            'permission' => 'template-admin',
+            'singular'   => true,
+            'autoload'   => true,
+            'requires'   => array('SystemMigrations'),
+        );
+    }
+    
+    public function ___execute()
+    {
+        return '<h2>Foo</h2>';
+    }
+    /**
+     * Install the setup menu shortcut
+     */
+    public function ___install()
+    {
+        $page = new Page();
+        
+        $page->template = 'admin';
+        
+        $page->title = 'Migrations';
+        $page->name = self::PAGE_NAME; 
+        $page->parent = $this->pages->get($this->config->adminRootPageID)->child('name=setup');
+
+        $page->process = $this; 
+
+        $page->save();
+    }
+
+    /**
+     * Remove the setup menu shortcut
+     */
+    public function ___uninstall()
+    {
+        $moduleID = $this->modules->getModuleID($this); 
+        
+        $page = $this->pages->get("template=admin, process=$moduleID, name=" . self::PAGE_NAME); 
+
+        if ($page->id) {
+            $page->delete();
+        }
+    }
+}

@@ -50,7 +50,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
             'href'       => 'https://github.com/mindplay-dk/SystemMigrations',
             'singular'   => true,
             'autoload'   => true,
-            #'requires'   => array('ProcessField', 'ProcessTemplate'),
+            'installs'   => array('SystemMigrationsAdmin'),
         );
     }
 
@@ -65,14 +65,6 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         $this->addHookAfter('ProcessField::fieldDeleted', $this, 'hookFieldDeleted');
         
         $this->data_path = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'data';
-    }
-
-    /**
-     * Apply default configuration.
-     */
-    public function ___install()
-    {
-        // ...
     }
 
     /**
@@ -212,6 +204,9 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         $this->record('deleteField', array('name' => $data['name']));
     }
     
+    /**
+     * @return bool
+     */
     protected function canUpdateField($name, array $data)
     {
         if (wire('fields')->$name === null) {
@@ -236,6 +231,9 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         // ...
     }
 
+    /**
+     * @return bool
+     */
     protected function canAddField($name, $type, array $data)
     {
         if (wire('fields')->$name) {
@@ -256,7 +254,10 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     {
         // ...
     }
-
+    
+    /**
+     * @return bool
+     */
     protected function canDeleteField($name)
     {
         return true;
