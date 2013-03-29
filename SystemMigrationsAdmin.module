@@ -6,14 +6,14 @@
 class SystemMigrationsAdmin extends Process
 { 
     const PAGE_NAME = 'migrations';
-    
+
     /**
      * @return array module information
      */
     public static function getModuleInfo()
     {
         return array(
-            'title'      => 'Migrations',
+            'title'      => 'Migrations Admin',
             'author'     => 'Rasmus Schultz',
             'version'    => 100,
             'summary'    => 'Administration module for Migrations.',
@@ -21,7 +21,7 @@ class SystemMigrationsAdmin extends Process
             'requires'   => array('SystemMigrations'),
         );
     }
-    
+
     /**
      * Method to initialize the module.
      *
@@ -63,7 +63,7 @@ class SystemMigrationsAdmin extends Process
                 break;
             }
             
-            $migration_data = $this->loadMigration($migration_filename);
+            $migration_data = $this->loadMigration($filename);
             
             $html .= "<pre>" . ($installed ? '  ' : '* ') . htmlspecialchars($filename) . ' ' . htmlspecialchars($this->describe($migration_data));
             
@@ -97,18 +97,32 @@ class SystemMigrationsAdmin extends Process
      */
     public function ___executeApply()
     {
+        /**
+         * @var SystemMigrations $module
+         */
+
+        $module = wire('modules')->get('SystemMigrations');
+
+        $module->recording = false; // disable recording while we repeat pending changes
+
         $html = '<h2>Apply Migrations</h2>';
-        
+
         foreach ($this->getMigrations() as $filename => $installed) {
             if ($installed === false) {
-                $migration_data = $this->loadMigration($migration_filename);
+                $migration_data = $this->loadMigration($filename);
                 
                 $status = $this->canApply($migration_data);
                 
                 if ($status === true) {
                     $html .= '<pre>Applying ' . $filename . '</pre>';
+
+                    $this->apply($migration_data);
+
+                    $module->recordAppliedMigration($filename);
                 } else {
                     $html .= '<pre>Aborted ' . $filename . ' : ' . htmlspecialchars($status) . '</pre>';
+
+                    break; // break out of for-each loop
                 }
             }
         }
@@ -161,7 +175,30 @@ class SystemMigrationsAdmin extends Process
     {
         return json_decode(file_get_contents($this->data_path . DIRECTORY_SEPARATOR . $migration_filename), true);
     }
-    
+
+    /**
+     * @param array migration data
+     * @return string a description of the migration contained in the given migration file
+     */
+    public function describe($migration_data)
+    {
+        $strings = array();
+
+        foreach ($migration_data as $data) {
+            $string = array();
+
+            foreach ($data['params'] as $name => $value) {
+                if (is_scalar($value)) {
+                    $string[] = $name . ':' . strval($value);
+                }
+            }
+
+            $strings[] = $data['method'] . '(' . implode(' ', $string) . ')';
+        }
+
+        return implode(', ', $strings);
+    }
+
     /**
      * @param array migration data
      */
@@ -170,9 +207,7 @@ class SystemMigrationsAdmin extends Process
         if (!is_array($migration_data) || count($migration_data) === 0) {
             return 'Invalid migration file';
         }
-        
-        $
-        
+
         foreach ($migration_data as $data) {
             $fn = 'can' . ucfirst($data['method']);
             
@@ -183,32 +218,21 @@ class SystemMigrationsAdmin extends Process
         
         return call_user_func_array(array($this, $fn), $data['params']);
     }
-    
+
     /**
      * @param array migration data
-     * @return string a description of the migration contained in the given migration file
      */
-    public function describe($migration_data)
+    public function apply($migration_data)
     {
-        $strings = array();
-        
         foreach ($migration_data as $data) {
-            $string = array();
-            
-            foreach ($data['params'] as $name => $value) {
-                if (is_scalar($value)) {
-                    $string[] = $name . ':' . strval($value);
-                }
-            }
-            
-            $strings[] = $data['method'] . '(' . implode(' ', $string) . ')';
+            call_user_func_array(array($this, $data['method']), $data['params']);
         }
-        
-        return implode(', ', $strings);
     }
-    
+
     /**
-     * @return bool
+     * @return bool|string true on success; or a string with an error-message
+     *
+     * @see SystemMigrations::hookFieldUpdated()
      */
     protected function canUpdateField($name, array $data)
     {
@@ -216,7 +240,7 @@ class SystemMigrationsAdmin extends Process
             return "Undefined Field: $name";
         }
         
-        return true; // TODO
+        return true;
     }
     
     /**
@@ -228,14 +252,28 @@ class SystemMigrationsAdmin extends Process
      *
      * @param string $name the (current) name of the Field
      * @param array $data new properties and settings for the Field
+     *
+     * @see SystemMigrations::hookFieldUpdated()
      */
     protected function updateField($name, array $data)
     {
-        // ...
+        /**
+         * @var Field $field
+         */
+
+        $field = wire('fields')->$name;
+
+        foreach ($data as $name => $value) {
+            $field->$name = $value;
+        }
+
+        $field->save();
     }
 
     /**
-     * @return bool
+     * @return bool|string true on success; or a string with an error-message
+     *
+     * @see SystemMigrations::hookFieldAdded()
      */
     protected function canAddField($name, $type, array $data)
     {
@@ -243,7 +281,7 @@ class SystemMigrationsAdmin extends Process
             return "Field already exists: $name";
         }
         
-        return true; // TODO
+        return true;
     }
         
     /**
@@ -252,17 +290,39 @@ class SystemMigrationsAdmin extends Process
      * @param string $name the name of the new Field
      * @param string $type the Field type (class) name
      * @param array $data new properties and settings for the Field
+     *
+     * @see SystemMigrations::hookFieldAdded()
      */
     protected function addField($name, $type, array $data)
     {
-        // ...
+        /**
+         * @var Fields $fields
+         */
+
+        $fields = wire('fields');
+
+        $field = new Field();
+        $field->setName($name);
+        $field->setFieldtype($type);
+
+        foreach ($data as $name => $value) {
+            $field->$name = $value;
+        }
+
+        $field->save();
     }
     
     /**
-     * @return bool
+     * @return bool|string true on success; or a string with an error-message
+     *
+     * @see SystemMigrations::hookFieldDeleted()
      */
     protected function canDeleteField($name)
     {
+        if (wire('fields')->$name === null) {
+            return "Undefined Field: $name"; // is it necessary to consider this an error?
+        }
+
         return true;
     }
     
@@ -270,9 +330,20 @@ class SystemMigrationsAdmin extends Process
      * Deletes an existing Field
      *
      * @param string $name the name of the deleted Field
+     *
+     * @see SystemMigrations::hookFieldDeleted()
      */
     protected function deleteField($name)
     {
-        // ...
+        /**
+         * @var Fields $fields
+         * @var Field $field
+         */
+
+        $fields = wire('fields');
+
+        $field = $fields->$name;
+
+        $fields->delete($field);
     }
 }

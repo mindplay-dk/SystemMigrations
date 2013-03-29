@@ -22,6 +22,11 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     public $data_path;
 
     /**
+     * @var bool if true, the module is currently recording changes
+     */
+    public $recording = true;
+
+    /**
      * @var array list of Field properties and settings at the time of loading
      */
     protected $old_data = array();
@@ -66,7 +71,8 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         $this->addHookAfter('ProcessField::fieldSaved', $this, 'hookFieldSaved');
         $this->addHookAfter('ProcessField::fieldAdded', $this, 'hookFieldAdded');
         $this->addHookAfter('ProcessField::fieldDeleted', $this, 'hookFieldDeleted');
-        
+        #$this->addHookAfter('ProcessField::fieldChangedType', $this, 'hookFieldChangedType');
+
         $this->data_path = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'data';
     }
 
@@ -102,7 +108,9 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
      */
     protected function record($method, array $params)
     {
-        $this->recorded[] = array('method' => $method, 'params' => $params);
+        if ($this->recording) {
+            $this->recorded[] = array('method' => $method, 'params' => $params);
+        }
     }
 
     /**
@@ -179,9 +187,13 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         $field = $event->argumentsByName('field');
 
         $data = $this->getFieldData($field);
-        
+
+        $name = $data['name'];
+
+        unset($data['name']);
+
         $this->record('addField', array(
-                'name' => $data['name'],
+                'name' => $name,
                 'type' => $field->type->name,
                 'data' => $data)
         );
@@ -200,9 +212,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
 
         $field = $event->argumentsByName('field');
 
-        $data = $this->getFieldData($field);
-
-        $this->record('deleteField', array('name' => $data['name']));
+        $this->record('deleteField', array('name' => $field->name));
     }
     
     /**
@@ -264,22 +274,30 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     
     /**
      * Load list of migrations available on this system
+     *
+     * @return ArrayObject
      */
     public function getMigrations()
     {
+        /**
+         * @var ArrayObject $migrations
+         */
+
         static $migrations;
         
-        if ($migrations === null) {  
+        if ($migrations === null) {
+            $migrations = new ArrayObject();
+
             $registry_path = $this->data_path . DIRECTORY_SEPARATOR . self::REGISTRY_FILENAME;
             
             if (file_exists($registry_path)) {
                 // load registry:
-                $migrations = json_decode(file_get_contents($registry_path), true);
+                $migrations->exchangeArray(json_decode(file_get_contents($registry_path), true));
                 
-                // sanitize registry:
+                // sanitize the registry:
                 foreach ($migrations as $existing_filename => $installed) {
                     if (! file_exists($this->data_path . DIRECTORY_SEPARATOR . $existing_filename)) {
-                        unset($migrations[$existing_filename]);
+                        unset($migrations[$existing_filename]); // physical file has been removed
                     }
                 }
             }
@@ -289,20 +307,43 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
                 $migration_filename = basename($migration_path);
                 
                 if (! array_key_exists($migration_filename, $migrations)) {
-                    $migrations[ $migration_filename ] = false;
+                    $migrations[ $migration_filename ] = false; // physical file detected - add to registry
                 }
             }
         }
         
         return $migrations;
     }
-    
+
+    /**
+     * Flag a specified migration-file as having been applied to this system
+     *
+     * @param string $filename
+     */
+    public function recordAppliedMigration($filename)
+    {
+        // record applied migration:
+
+        $registry = $this->getMigrations();
+
+        $registry[$filename] = true;
+
+        file_put_contents(
+            /* $filename: */ $this->data_path . DIRECTORY_SEPARATOR . self::REGISTRY_FILENAME,
+            /* $data */ json_encode($registry)
+        );
+    }
+
     /**
      * Write any recorded changes to a new migration file.
      */
     public function __destruct()
     {
-        $filename = date('Y-m-d-H-i-s-') . substr(md5(rand(0,9999999).microtime(true)),0,8) . '.json';
+        list($n, $time) = explode('.', microtime(true));
+
+        $filename = date('Y-m-d-H-i-s-')
+            . str_pad(substr($time,-4), 4, '0', STR_PAD_LEFT) . '-'
+            . substr(md5(rand(0,9999999).microtime(true)),0,8) . '.json';
         
         if (count($this->recorded)) {
             file_put_contents(
@@ -310,16 +351,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
                 /* $data: */ json_encode($this->recorded)
             );
             
-            // record applied migration:
-            
-            $registry = $this->getMigrations();
-            
-            $registry[$filename] = true;
-            
-            file_put_contents(
-                /* $filename: */ $this->data_path . DIRECTORY_SEPARATOR . self::REGISTRY_FILENAME,
-                /* $data */ json_encode($registry)
-            );
+            $this->recordAppliedMigration($filename);
         }
     }
 }
