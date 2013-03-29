@@ -68,10 +68,16 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     public function __construct()
     {
         $this->addHookAfter('Fields::load', $this, 'hookFieldLoaded');
+
         $this->addHookAfter('ProcessField::fieldSaved', $this, 'hookFieldSaved');
         $this->addHookAfter('ProcessField::fieldAdded', $this, 'hookFieldAdded');
         $this->addHookAfter('ProcessField::fieldDeleted', $this, 'hookFieldDeleted');
         $this->addHookAfter('ProcessField::fieldChangedType', $this, 'hookFieldChangedType');
+
+        #$this->addHookBefore('Fields::save', $this, 'hookBeforeFieldSaved');
+        #$this->addHookAfter('Fields::save', $this, 'hookAfterFieldSaved');
+        #$this->addHookAfter('Fields::delete', $this, 'hookFieldDeleted');
+        #$this->addHookAfter('Fields::changeFieldtype', $this, 'hookFieldChangedType');
 
         $this->data_path = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'data';
     }
