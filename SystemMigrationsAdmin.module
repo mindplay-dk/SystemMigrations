@@ -346,4 +346,51 @@ class SystemMigrationsAdmin extends Process
 
         $fields->delete($field);
     }
+
+    /**
+     * @param string $name
+     * @param string $type
+     * @return bool|string true on success; or a string with an error-message
+     */
+    protected function canChangeFieldType($name, $type)
+    {
+        /**
+         * @var Field $field
+         */
+
+        $field = wire('fields')->$name;
+
+        if ($field === null) {
+            return "Undefined Field: $name";
+        }
+
+        if (wire('fieldtypes')->get($type) === null) {
+            return "Unknown FieldType: $type";
+        }
+
+        // note that all we can do to assert this is going to work, is check that
+        // the Field and FieldType exists - whether or not changing the FieldType
+        // succeeds is not known until attempted.
+
+        return true;
+    }
+
+    /**
+     * Changes the type of an existing field
+     *
+     * @param string $name
+     * @param string $type
+     */
+    protected function changeFieldType($name, $type)
+    {
+        /**
+         * @var Field $field
+         */
+
+        $field = wire('fields')->$name;
+
+        $field->setFieldtype($type);
+
+        $field->save();
+    }
 }

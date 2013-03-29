@@ -71,7 +71,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         $this->addHookAfter('ProcessField::fieldSaved', $this, 'hookFieldSaved');
         $this->addHookAfter('ProcessField::fieldAdded', $this, 'hookFieldAdded');
         $this->addHookAfter('ProcessField::fieldDeleted', $this, 'hookFieldDeleted');
-        #$this->addHookAfter('ProcessField::fieldChangedType', $this, 'hookFieldChangedType');
+        $this->addHookAfter('ProcessField::fieldChangedType', $this, 'hookFieldChangedType');
 
         $this->data_path = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'data';
     }
@@ -214,7 +214,23 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
 
         $this->record('deleteField', array('name' => $field->name));
     }
-    
+
+    /**
+     * @param HookEvent $event
+     *
+     * @see ProcessField::___fieldChangedType()
+     */
+    public function hookFieldChangedType(HookEvent $event)
+    {
+        /**
+         * @var Field $field
+         */
+
+        $field = $event->argumentsByName('field');
+
+        $this->record('changeFieldType', array('name' => $field->name, 'type' => $field->type->name));
+    }
+
     /**
      * Extract all important Field properties and settings
      *
