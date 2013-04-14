@@ -69,15 +69,10 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     {
         $this->addHookAfter('Fields::load', $this, 'hookFieldLoaded');
 
-        $this->addHookAfter('ProcessField::fieldSaved', $this, 'hookFieldSaved');
-        $this->addHookAfter('ProcessField::fieldAdded', $this, 'hookFieldAdded');
-        $this->addHookAfter('ProcessField::fieldDeleted', $this, 'hookFieldDeleted');
-        $this->addHookAfter('ProcessField::fieldChangedType', $this, 'hookFieldChangedType');
-
-        #$this->addHookBefore('Fields::save', $this, 'hookBeforeFieldSaved');
-        #$this->addHookAfter('Fields::save', $this, 'hookAfterFieldSaved');
-        #$this->addHookAfter('Fields::delete', $this, 'hookFieldDeleted');
-        #$this->addHookAfter('Fields::changeFieldtype', $this, 'hookFieldChangedType');
+        $this->addHookAfter('Fields::saved', $this, 'hookFieldSaved');
+        $this->addHookAfter('Fields::added', $this, 'hookFieldAdded');
+        $this->addHookAfter('Fields::deleted', $this, 'hookFieldDeleted');
+        $this->addHookAfter('Fields::changedType', $this, 'hookFieldChangedType');
 
         $this->data_path = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'data';
     }
@@ -143,15 +138,15 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     /**
      * @param HookEvent $event
      *
-     * @see ProcessField::___fieldSaved()
+     * @see Fields::___saved()
      */
     public function hookFieldSaved(HookEvent $event)
     {
         /**
          * @var Field $field
          */
-
-        $field = $event->argumentsByName('field');
+        
+        $field = $event->argumentsByName('item');
         
         $data = $this->getFieldData($field);
         
@@ -182,7 +177,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     /**
      * @param HookEvent $event
      *
-     * @see ProcessField::___fieldAdded()
+     * @see Fields::added()
      */
     public function hookFieldAdded(HookEvent $event)
     {
@@ -190,7 +185,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
          * @var Field $field
          */
 
-        $field = $event->argumentsByName('field');
+        $field = $event->argumentsByName('item');
 
         $data = $this->getFieldData($field);
 
@@ -199,16 +194,16 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         unset($data['name']);
 
         $this->record('addField', array(
-                'name' => $name,
-                'type' => $field->type->name,
-                'data' => $data)
+            'name' => $name,
+            'type' => $field->type->name,
+            'data' => $data)
         );
     }
     
     /**
      * @param HookEvent $event
      *
-     * @see ProcessField::___fieldSaved()
+     * @see Fields::___deleted()
      */
     public function hookFieldDeleted(HookEvent $event)
     {
@@ -216,7 +211,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
          * @var Field $field
          */
 
-        $field = $event->argumentsByName('field');
+        $field = $event->argumentsByName('item');
 
         $this->record('deleteField', array('name' => $field->name));
     }
@@ -224,7 +219,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     /**
      * @param HookEvent $event
      *
-     * @see ProcessField::___fieldChangedType()
+     * @see Fields::___changedType()
      */
     public function hookFieldChangedType(HookEvent $event)
     {
@@ -232,7 +227,9 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
          * @var Field $field
          */
 
-        $field = $event->argumentsByName('field');
+        $field = $event->argumentsByName('item');
+        
+        // TODO: get the $fromType argument, record the previous type, check it when applying this change
 
         $this->record('changeFieldType', array('name' => $field->name, 'type' => $field->type->name));
     }
