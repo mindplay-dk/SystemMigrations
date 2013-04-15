@@ -67,13 +67,17 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
      */
     public function __construct()
     {
+        // Record changes to Fields:
         $this->addHookAfter('Fields::load', $this, 'hookFieldLoaded');
-
         $this->addHookAfter('Fields::saved', $this, 'hookFieldSaved');
         $this->addHookAfter('Fields::added', $this, 'hookFieldAdded');
         $this->addHookAfter('Fields::deleted', $this, 'hookFieldDeleted');
         $this->addHookAfter('Fields::changedType', $this, 'hookFieldChangedType');
-
+        
+        // Flush changes after page rendered and/or after redirect:
+        $this->addHookBefore('Session::redirect', $this, 'flushChanges');
+        $this->addHookAfter('ProcessPageView::finished', $this, 'flushChanges');
+        
         $this->data_path = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'data';
     }
 
@@ -86,19 +90,6 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
      */
     public function init()
     {
-        // ...
-    }
-
-    /**
-     *
-     */
-    public function ready()
-    {
-        if ($this->page->template != 'admin') {
-            return;
-        }
-        
-        // ...
     }
 
     /**
@@ -355,19 +346,22 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
 
     /**
      * Write any recorded changes to a new migration file.
+     *
+     * @param HookEvent $event unused
      */
-    public function __destruct()
+    public function flushChanges(HookEvent $event)
     {
-        list($n, $time) = explode('.', microtime(true));
-
-        $filename = date('Y-m-d-H-i-s-')
-            . str_pad(substr($time,-4), 4, '0', STR_PAD_LEFT) . '-'
-            . substr(md5(rand(0,9999999).microtime(true)),0,8) . '.json';
-        
         if (count($this->recorded)) {
+            list($n, $time) = explode('.', microtime(true));
+
+            $filename = date('Y-m-d-H-i-s-')
+                . str_pad(substr($time,-4), 4, '0', STR_PAD_LEFT) . '-'
+                . substr(md5(rand(0,9999999).microtime(true)),0,8) . '.json';
+            
             file_put_contents(
-                /* $filename: */ $this->data_path . DIRECTORY_SEPARATOR . $filename,
-                /* $data: */ json_encode($this->recorded)
+                $this->data_path . DIRECTORY_SEPARATOR . $filename
+                ,
+                json_encode($this->recorded)
             );
             
             $this->recordAppliedMigration($filename);
