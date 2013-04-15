@@ -29,7 +29,12 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     /**
      * @var array list of Field properties and settings at the time of loading
      */
-    protected $old_data = array();
+    protected $field_data = array();
+
+    /**
+     * @var array list of Template properties and settings at the time of loading
+     */
+    protected $template_data = array();
 
     /**
      * @var array list of recorded function-calls, nested arrays like:
@@ -74,6 +79,9 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         $this->addHookAfter('Fields::deleted', $this, 'hookFieldDeleted');
         $this->addHookAfter('Fields::changedType', $this, 'hookFieldChangedType');
         
+        // Record changes to Templates:
+        #$this->addHookAfter('Templates::load', $this, 'hookTemplateLoaded');
+        
         // Flush changes after page rendered and/or after redirect:
         $this->addHookBefore('Session::redirect', $this, 'flushChanges');
         $this->addHookAfter('ProcessPageView::finished', $this, 'flushChanges');
@@ -117,12 +125,10 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
          * @var WireArray $fields
          */
 
-        #$event->object
-
         $fields = $event->argumentsByName('items');
 
         foreach ($fields as $field) {
-            $this->old_data[$field->id] = $this->getFieldData($field);
+            $this->field_data[$field->id] = $this->getFieldData($field);
         }
     }
 
@@ -141,25 +147,25 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         
         $data = $this->getFieldData($field);
         
-        $old_data = $this->old_data[$field->id];
+        $field_data = $this->field_data[$field->id];
 
         $diff = array();
 
-        foreach ($old_data as $name => $value) {
+        foreach ($field_data as $name => $value) {
             if ($value != @$data[$name]) {
                 $diff[$name] = $data[$name];
             }
         }
         
         foreach ($data as $name => $value) {
-            if ($value != @$old_data[$name]) {
+            if ($value != @$field_data[$name]) {
                 $diff[$name] = $value;
             }
         }
         
         if (count($diff)) {
             $this->record('updateField', array(
-                    'name' => $old_data['name'],
+                    'name' => $field_data['name'],
                     'data' => $diff)
             );
         }
@@ -260,6 +266,47 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         return $data;
     }
 
+    /**
+     * Extract all important Template properties and settings
+     *
+     * @param Template $template
+     * @return array
+     */
+    protected function getTemplateData(Template $template)
+    {
+        $data = array(
+            'settings' => $template->settings, // doesn't work! should use getTableData()
+            'data' => $template->getArray(),
+        );
+
+        $data['name'] = $template->name;
+
+        unset($data['id']);
+        
+        var_dump($data); die();
+        
+        return $data;
+    }
+
+    /**
+     * @param HookEvent $event
+     *
+     * @see WireSaveableItems::___load()
+     * @see Templates::___load()
+     */
+    public function hookTemplateLoaded(HookEvent $event)
+    {
+        /**
+         * @var TemplatesArray $templates
+         */
+
+        $templates = $event->argumentsByName('items');
+
+        foreach ($templates as $template) {
+            $this->template_data[$template->id] = $this->getTemplateData($template);
+        }
+    }
+    
     /**
      * Builds the Module configuration form.
      *
