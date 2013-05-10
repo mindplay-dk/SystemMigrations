@@ -39,8 +39,10 @@ class SystemMigrationsAdmin extends Process
      */
     public function ___execute()
     {
-        $modules = Wire::getFuel('modules');
-        
+        /**
+         * @var InputfieldWrapper $fields
+         */
+
         $fields = new InputfieldWrapper();
         
         $html = "<h2>Pending Migrations</h2>\n";
@@ -166,9 +168,11 @@ class SystemMigrationsAdmin extends Process
     {
         return wire('modules')->SystemMigrations->getMigrations();
     }
-    
+
     /**
      * Load data from a migration file
+     *
+     * @param string $migration_filename
      * @return array
      */
     protected function loadMigration($migration_filename)
@@ -177,7 +181,7 @@ class SystemMigrationsAdmin extends Process
     }
 
     /**
-     * @param array migration data
+     * @param array $migration_data
      * @return string a description of the migration contained in the given migration file
      */
     public function describe($migration_data)
@@ -200,7 +204,8 @@ class SystemMigrationsAdmin extends Process
     }
 
     /**
-     * @param array migration data
+     * @param array $migration_data
+     * @return bool|string
      */
     public function canApply($migration_data)
     {
@@ -230,11 +235,14 @@ class SystemMigrationsAdmin extends Process
     }
 
     /**
+     * @param string $name
+     * @param array $updated
+     * @param string[] $removed
      * @return bool|string true on success; or a string with an error-message
      *
      * @see SystemMigrations::hookFieldUpdated()
      */
-    protected function canUpdateField($name, array $data)
+    protected function canUpdateField($name, array $updated, array $removed)
     {
         if (wire('fields')->$name === null) {
             return "Undefined Field: $name";
@@ -242,7 +250,7 @@ class SystemMigrationsAdmin extends Process
         
         return true;
     }
-    
+
     /**
      * Apply updates to a Field
      *
@@ -251,11 +259,13 @@ class SystemMigrationsAdmin extends Process
      * update - if the field's name has changed, the new name is in $data['name']
      *
      * @param string $name the (current) name of the Field
-     * @param array $data new properties and settings for the Field
+     * @param array $updated
+     * @param string[] $removed
+     * @internal param array $data new properties and settings for the Field
      *
      * @see SystemMigrations::hookFieldUpdated()
      */
-    protected function updateField($name, array $data)
+    protected function updateField($name, array $updated, array $removed)
     {
         /**
          * @var Field $field
@@ -263,14 +273,21 @@ class SystemMigrationsAdmin extends Process
 
         $field = wire('fields')->$name;
 
-        foreach ($data as $name => $value) {
+        foreach ($updated as $name => $value) {
             $field->$name = $value;
+        }
+
+        foreach ($removed as $name) {
+            unset($field->$name);
         }
 
         $field->save();
     }
 
     /**
+     * @param string $name
+     * @param string $type
+     * @param array $data
      * @return bool|string true on success; or a string with an error-message
      *
      * @see SystemMigrations::hookFieldAdded()
@@ -311,8 +328,9 @@ class SystemMigrationsAdmin extends Process
 
         $field->save();
     }
-    
+
     /**
+     * @param string $name
      * @return bool|string true on success; or a string with an error-message
      *
      * @see SystemMigrations::hookFieldDeleted()

@@ -80,12 +80,13 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         $this->addHookAfter('Fields::changedType', $this, 'hookFieldChangedType');
         
         // Record changes to Templates:
-        #$this->addHookAfter('Templates::load', $this, 'hookTemplateLoaded');
-        
+        $this->addHookAfter('Templates::load', $this, 'hookTemplateLoaded');
+        $this->addHookAfter('Templates::saved', $this, 'hookTemplateSaved');
+
         // Flush changes after page rendered and/or after redirect:
         $this->addHookBefore('Session::redirect', $this, 'flushChanges');
         $this->addHookAfter('ProcessPageView::finished', $this, 'flushChanges');
-        
+
         $this->data_path = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'data';
     }
 
@@ -145,28 +146,40 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         
         $field = $event->argumentsByName('item');
         
-        $data = $this->getFieldData($field);
+        $new_data = $this->getFieldData($field);
         
-        $field_data = $this->field_data[$field->id];
+        $old_data = $this->field_data[$field->id];
 
-        $diff = array();
+        $updated = array();
 
-        foreach ($field_data as $name => $value) {
-            if ($value != @$data[$name]) {
-                $diff[$name] = $data[$name];
+        $removed = array();
+
+        foreach ($old_data as $name => $value) {
+            if (array_key_exists($name, $new_data) && $value != $new_data[$name]) {
+                $updated[$name] = $new_data[$name];
             }
         }
-        
-        foreach ($data as $name => $value) {
-            if ($value != @$field_data[$name]) {
-                $diff[$name] = $value;
+
+        foreach ($new_data as $name => $value) {
+            if (array_key_exists($name, $old_data)) {
+                if ($value != $old_data[$name]) {
+                    $updated[$name] = $value;
+                }
+            } else {
+                if (!empty($old_data[$name])) {
+                    $removed[] = $name;
+                }
             }
         }
-        
-        if (count($diff)) {
-            $this->record('updateField', array(
-                    'name' => $field_data['name'],
-                    'data' => $diff)
+
+        if (count($updated)) {
+            $this->record(
+                'updateField',
+                array(
+                    'name' => $old_data['name'],
+                    'updated' => $updated,
+                    'removed' => $removed,
+                )
             );
         }
     }
@@ -274,17 +287,19 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
      */
     protected function getTemplateData(Template $template)
     {
-        $data = array(
-            'settings' => $template->settings, // doesn't work! should use getTableData()
-            'data' => $template->getArray(),
-        );
+        $settings = $template->getTableData();
 
-        $data['name'] = $template->name;
+        // pull ['data'] from $settings and merge it's contents into $settings :
+        $data = $settings['data'];
+        unset($settings['data']);
+        $settings = array_merge($data, $settings);
 
+        // include template name in settings:
+        $settings['name'] = $template->name;
+
+        // exclude Template ID, which cannot change:
         unset($data['id']);
-        
-        var_dump($data); die();
-        
+
         return $data;
     }
 
@@ -306,18 +321,31 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
             $this->template_data[$template->id] = $this->getTemplateData($template);
         }
     }
-    
+
+    /**
+     * @param HookEvent $event
+     *
+     * @see WireSaveableItems::___saved()
+     * @see Templates::___saved()
+     */
+    public function hookTemplateSaved(HookEvent $event)
+    {
+        $template = $event->argumentsByName('item');
+
+        $data = $this->getTemplateData($template);
+
+        $old_data = $this->template_data[$template->id];
+    }
+
     /**
      * Builds the Module configuration form.
      *
      * @param array $data module configuration values
      *
-     * @return InputfieldsWrapper|InputfieldWrapper
+     * @return InputfieldWrapper
      */
     static public function getModuleConfigInputfields(array $data)
     {
-        $modules = Wire::getFuel('modules');
-        
         $fields = new InputfieldWrapper();
         
         $markup = wire('modules')->get('InputfieldMarkup');
