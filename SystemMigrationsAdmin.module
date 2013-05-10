@@ -4,7 +4,7 @@
  * This module is responsible for repeating changes to Fields and Templates.
  */
 class SystemMigrationsAdmin extends Process
-{ 
+{
     const PAGE_NAME = 'migrations';
 
     /**
@@ -33,7 +33,7 @@ class SystemMigrationsAdmin extends Process
     {
         $this->data_path = wire('modules')->SystemMigrations->data_path;
     }
-    
+
     /**
      * Display migration status
      */
@@ -44,56 +44,56 @@ class SystemMigrationsAdmin extends Process
          */
 
         $fields = new InputfieldWrapper();
-        
+
         $html = "<h2>Pending Migrations</h2>\n";
-        
+
         $first = true;
-        
+
         $count = 0; $max = 100;
-        
+
         $fast_forward = true;
-        
+
         foreach ($this->getMigrations() as $filename => $installed) {
             if ($fast_forward && $installed) {
                 continue; // fast foward past already installed migrations
             } else {
                 $fast_forward = false;
             }
-            
+
             if (++$count > $max) {
                 $html .= "<pre>  More than $max migrations in registry...</pre>\n";
                 break;
             }
-            
+
             $migration_data = $this->loadMigration($filename);
-            
+
             $html .= "<pre>" . ($installed ? '  ' : '* ') . htmlspecialchars($filename) . ' ' . htmlspecialchars($this->describe($migration_data));
-            
+
             if (($installed === false) && $first) {
                 $first = false;
-                
+
                 $status = $this->canApply($migration_data);
-                
+
                 $html .= " <- " . ($status === true ? "READY" : $status);
-                
+
                 $html .= "</pre>\n";
             }
         }
-        
+
         if (!$first) {
-            $html .= '<h3><a style="border:solid 1px black;border-radius:8px;padding:8px;background:white;" href="./apply" onclick="return confirm(\'Apply pending Migrations now?\');"><span>Apply Migrations</span></a></h3>';
+            $html .= '<h3><a style="border:solid 1px black;border-radius:8px;padding:8px;" href="./apply" onclick="return confirm(\'Apply pending Migrations now?\');"><span>Apply Migrations</span></a></h3>';
         } else {
             $html .= '<h3>Your Fields &amp; Templates are up to date.</h3>';
         }
-        
+
         $markup = wire('modules')->get('InputfieldMarkup');
         $markup->markupText = $html;
-        
+
         $fields->append($markup);
-        
+
         return $fields->render();
     }
-    
+
     /**
      * Apply migrations
      */
@@ -112,9 +112,9 @@ class SystemMigrationsAdmin extends Process
         foreach ($this->getMigrations() as $filename => $installed) {
             if ($installed === false) {
                 $migration_data = $this->loadMigration($filename);
-                
+
                 $status = $this->canApply($migration_data);
-                
+
                 if ($status === true) {
                     $html .= '<pre>Applying ' . $filename . '</pre>';
 
@@ -128,24 +128,24 @@ class SystemMigrationsAdmin extends Process
                 }
             }
         }
-        
+
         return $html;
     }
-    
+
     /**
      * Install the setup menu shortcut
      */
     public function ___install()
     {
         $page = new Page();
-        
+
         $page->template = 'admin';
-        
+
         $page->title = 'Migrations';
-        $page->name = self::PAGE_NAME; 
+        $page->name = self::PAGE_NAME;
         $page->parent = $this->pages->get($this->config->adminRootPageID)->child('name=setup');
 
-        $page->process = $this; 
+        $page->process = $this;
 
         $page->save();
     }
@@ -155,15 +155,15 @@ class SystemMigrationsAdmin extends Process
      */
     public function ___uninstall()
     {
-        $moduleID = $this->modules->getModuleID($this); 
-        
-        $page = $this->pages->get("template=admin, process=$moduleID, name=" . self::PAGE_NAME); 
+        $moduleID = $this->modules->getModuleID($this);
+
+        $page = $this->pages->get("template=admin, process=$moduleID, name=" . self::PAGE_NAME);
 
         if ($page->id) {
             $page->delete();
         }
     }
-    
+
     public function getMigrations()
     {
         return wire('modules')->SystemMigrations->getMigrations();
@@ -215,12 +215,12 @@ class SystemMigrationsAdmin extends Process
 
         foreach ($migration_data as $data) {
             $fn = 'can' . ucfirst($data['method']);
-            
+
             if (! (method_exists($this, $fn) && method_exists($this, $data['method']))) {
                 return 'Unsupported migration type: ' . $data['method'];
             }
         }
-        
+
         return call_user_func_array(array($this, $fn), $data['params']);
     }
 
@@ -247,7 +247,7 @@ class SystemMigrationsAdmin extends Process
         if (wire('fields')->$name === null) {
             return "Undefined Field: $name";
         }
-        
+
         return true;
     }
 
@@ -297,10 +297,10 @@ class SystemMigrationsAdmin extends Process
         if (wire('fields')->$name) {
             return "Field already exists: $name";
         }
-        
+
         return true;
     }
-        
+
     /**
      * Adds a new Field
      *
@@ -343,7 +343,7 @@ class SystemMigrationsAdmin extends Process
 
         return true;
     }
-    
+
     /**
      * Deletes an existing Field
      *
@@ -410,5 +410,50 @@ class SystemMigrationsAdmin extends Process
         $field->setFieldtype($type);
 
         $field->save();
+    }
+
+    /**
+     * @param string $name
+     * @param array $updated
+     * @param string[] $removed
+     * @return bool|string
+     *
+     * @see SystemMigrations::hookTemplateSaved()
+     */
+    protected function canUpdateTemplate($name, array $updated, array $removed)
+    {
+        if (wire('templates')->$name) {
+            return true;
+        }
+
+        return "Template does not exist: $name";
+    }
+
+    /**
+     * Updates an existing Template.
+     *
+     * @param string $name
+     * @param array $updated
+     * @param string[] $removed
+     *
+     * @see SystemMigrations::hookTemplateSaved()
+     */
+    protected function updateTemplate($name, array $updated, array $removed)
+    {
+        /**
+         * @var Template $template
+         */
+
+        $template = wire('templates')->$name;
+
+        foreach ($updated as $name => $value) {
+            $template->$name = $value;
+        }
+
+        foreach ($removed as $name) {
+            unset($template->$name);
+        }
+
+        $template->save();
     }
 }
