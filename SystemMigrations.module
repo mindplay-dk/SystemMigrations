@@ -87,6 +87,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         $this->addHookBefore('Session::redirect', $this, 'flushChanges');
         $this->addHookAfter('ProcessPageView::finished', $this, 'flushChanges');
 
+        // Configure path to migrations data:
         $this->data_path = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'data';
     }
 
@@ -99,6 +100,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
      */
     public function init()
     {
+        // Hi there!
     }
 
     /**
@@ -292,10 +294,10 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         // pull ['data'] from $settings and merge it's contents into $settings :
         $data = $settings['data'];
         unset($settings['data']);
-        $settings = array_merge($data, $settings);
+        $data = array_merge($settings, $data);
 
-        // include template name in settings:
-        $settings['name'] = $template->name;
+        // include template name in data:
+        $data['name'] = $template->name;
 
         // exclude Template ID, which cannot change:
         unset($data['id']);
@@ -332,9 +334,42 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     {
         $template = $event->argumentsByName('item');
 
-        $data = $this->getTemplateData($template);
-
         $old_data = $this->template_data[$template->id];
+
+        $new_data = $this->getTemplateData($template);
+
+        $updated = array();
+
+        $removed = array();
+
+        foreach ($old_data as $name => $value) {
+            if (array_key_exists($name, $new_data) && $value != $new_data[$name]) {
+                $updated[$name] = $new_data[$name];
+            }
+        }
+
+        foreach ($new_data as $name => $value) {
+            if (array_key_exists($name, $old_data)) {
+                if ($value != $old_data[$name]) {
+                    $updated[$name] = $value;
+                }
+            } else {
+                if (!empty($old_data[$name])) {
+                    $removed[] = $name;
+                }
+            }
+        }
+
+        if (count($updated)) {
+            $this->record(
+                'updateTemplate',
+                array(
+                    'name' => $old_data['name'],
+                    'updated' => $updated,
+                    'removed' => $removed,
+                )
+            );
+        }
     }
 
     /**
