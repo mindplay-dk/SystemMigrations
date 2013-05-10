@@ -82,6 +82,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         // Record changes to Templates:
         $this->addHookAfter('Templates::load', $this, 'hookTemplateLoaded');
         $this->addHookAfter('Templates::saved', $this, 'hookTemplateSaved');
+        $this->addHookAfter('Templates::added', $this, 'hookTemplateAdded');
 
         // Flush changes after page rendered and/or after redirect:
         $this->addHookBefore('Session::redirect', $this, 'flushChanges');
@@ -205,10 +206,13 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
 
         unset($data['name']);
 
-        $this->record('addField', array(
-            'name' => $name,
-            'type' => $field->type->name,
-            'data' => $data)
+        $this->record(
+            'addField',
+            array(
+                'name' => $name,
+                'type' => $field->type->name,
+                'data' => $data
+            )
         );
     }
     
@@ -373,6 +377,34 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     }
 
     /**
+     * @param HookEvent $event
+     *
+     * @see Templates::added()
+     */
+    public function hookTemplateAdded(HookEvent $event)
+    {
+        /**
+         * @var Template $field
+         */
+
+        $template = $event->argumentsByName('item');
+
+        $data = $this->getTemplateData($template);
+
+        $name = $data['name'];
+
+        unset($data['name']);
+
+        $this->record(
+            'addTemplate',
+            array(
+                'name' => $name,
+                'data' => $data
+            )
+        );
+    }
+
+    /**
      * Builds the Module configuration form.
      *
      * @param array $data module configuration values
@@ -450,7 +482,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
 
         file_put_contents(
             /* $filename: */ $this->data_path . DIRECTORY_SEPARATOR . self::REGISTRY_FILENAME,
-            /* $data */ json_encode($registry)
+            /* $data: */ json_encode($registry)
         );
     }
 
