@@ -32,6 +32,11 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     protected $field_data = array();
 
     /**
+     * @var array list of Fieldgroup properties and settings at the time of loading
+     */
+    protected $group_data = array();
+
+    /**
      * @var array list of Template properties and settings at the time of loading
      */
     protected $template_data = array();
@@ -79,10 +84,15 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         $this->addHookAfter('Fields::deleted', $this, 'hookFieldDeleted');
         $this->addHookAfter('Fields::changedType', $this, 'hookFieldChangedType');
 
+        // Record changes to FieldGroups:
+        $this->addHookAfter('Fieldgroups::load', $this, 'hookFieldgroupLoaded');
+        $this->addHookAfter('Fieldgroups::saved', $this, 'hookFieldgroupSaved');
+
         // Record changes to Templates:
         $this->addHookAfter('Templates::load', $this, 'hookTemplateLoaded');
         $this->addHookAfter('Templates::saved', $this, 'hookTemplateSaved');
         $this->addHookAfter('Templates::added', $this, 'hookTemplateAdded');
+        $this->addHookAfter('Templates::deleted', $this, 'hookTemplateDeleted');
 
         // Flush changes at the end of the request:
         $this->addHookAfter('ProcessPageView::finished', $this, 'flushChanges');
@@ -302,6 +312,26 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     }
 
     /**
+     * Extract Fieldgroup name and field context data
+     *
+     * @param Fieldgroup $group
+     * @return array
+     */
+    protected function getGroupData(Fieldgroup $group)
+    {
+        $fieldContexts = array();
+
+        foreach ($group as $field) {
+            $fieldContexts[$field->id] = $group->getFieldContextArray($field->id);
+        }
+
+        return array(
+            'name' => $group->name,
+            'fieldContexts' => $fieldContexts,
+        );
+    }
+
+    /**
      * Extract all important Template properties and settings
      *
      * @param Template $template
@@ -403,7 +433,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     /**
      * @param HookEvent $event
      *
-     * @see Templates::added()
+     * @see Templates::___added()
      */
     public function hookTemplateAdded(HookEvent $event)
     {
@@ -430,6 +460,26 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
                 'data' => $data
             )
         );
+    }
+
+    /**
+     * @param HookEvent $event
+     *
+     * @see Templates::deleted()
+     */
+    public function hookTemplateDeleted(HookEvent $event)
+    {
+        /**
+         * @var Template $template
+         */
+
+        if (! $this->recording) {
+            return; // not recording
+        }
+
+        $template = $event->argumentsByName('item');
+
+        $this->record('deleteTemplate', array('name' => $template->name));
     }
 
     /**
@@ -552,4 +602,83 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
 
         $this->recorded = array();
     }
+
+    /**
+     * @param HookEvent $event
+     *
+     * @see WireSaveableItems::___load()
+     * @see Fields::___load()
+     */
+    public function hookFieldgroupLoaded(HookEvent $event)
+    {
+        /**
+         * @var WireArray|Fieldgroup[] $groups
+         */
+
+        if (! $this->recording) {
+            return; // not recording
+        }
+
+        $groups = $event->argumentsByName('items');
+
+        foreach ($groups as $group) {
+            $this->group_data[$group->id] = $this->getGroupData($group);
+        }
+    }
+
+    /**
+     * @param HookEvent $event
+     *
+     * @see Fields::___saved()
+     */
+    public function hookFieldgroupSaved(HookEvent $event)
+    {
+        /**
+         * @var Field $field
+         */
+
+        if (! $this->recording) {
+            return; // not recording
+        }
+
+        $field = $event->argumentsByName('item');
+
+        $new_data = $this->getFieldData($field);
+
+        $old_data = $this->field_data[$field->id];
+
+        $updated = array();
+
+        $removed = array();
+
+        foreach ($old_data as $name => $value) {
+            if (array_key_exists($name, $new_data) && $value != $new_data[$name]) {
+                $updated[$name] = $new_data[$name];
+            }
+        }
+
+        foreach ($new_data as $name => $value) {
+            if (array_key_exists($name, $old_data)) {
+                if ($value != $old_data[$name]) {
+                    $updated[$name] = $value;
+                }
+            } else {
+                if (!empty($old_data[$name])) {
+                    $removed[] = $name;
+                }
+            }
+        }
+
+        if (count($updated)) {
+            $this->record(
+                'updateField',
+                array(
+                    'name' => $old_data['name'],
+                    'updated' => $updated,
+                    'removed' => $removed,
+                )
+            );
+        }
+    }
+
 }

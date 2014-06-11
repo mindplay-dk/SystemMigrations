@@ -338,7 +338,7 @@ class SystemMigrationsAdmin extends Process
     protected function canDeleteField($name)
     {
         if (wire('fields')->$name === null) {
-            return "Undefined Field: $name"; // is it necessary to consider this an error?
+            return "Undefined Field: $name"; // TODO QA: is it necessary to consider this an error?
         }
 
         return true;
@@ -353,16 +353,7 @@ class SystemMigrationsAdmin extends Process
      */
     protected function deleteField($name)
     {
-        /**
-         * @var Fields $fields
-         * @var Field $field
-         */
-
-        $fields = wire('fields');
-
-        $field = $fields->$name;
-
-        $fields->delete($field);
+        wire('fields')->delete($name);
     }
 
     /**
@@ -414,6 +405,44 @@ class SystemMigrationsAdmin extends Process
 
     /**
      * @param string $name
+     * @param array $data
+     *
+     * @return bool|string
+     */
+    protected function canAddTemplate($name, array $data)
+    {
+        if (wire('templates')->$name) {
+            return "Template already exists: $name";
+        }
+
+        return true;
+    }
+
+    /**
+     * @param string $name
+     * @param array $data
+     *
+     * @see SystemMigrations::hookTemplateAdded()
+     */
+    protected function addTemplate($name, array $data)
+    {
+        /**
+         * @var Fields $templates
+         */
+
+        $template = new Template();
+
+        $template->name = $name;
+
+        foreach ($data as $name => $value) {
+            $template->$name = $value;
+        }
+
+        $template->save();
+    }
+
+    /**
+     * @param string $name
      * @param array $updated
      * @param string[] $removed
      * @return bool|string
@@ -455,5 +484,33 @@ class SystemMigrationsAdmin extends Process
         }
 
         $template->save();
+    }
+
+    /**
+     * @param string $name
+     *
+     * @return bool
+     *
+     * @see SystemMigrations::hookTemplateDeleted()
+     */
+    protected function canDeleteTemplate($name)
+    {
+        if (wire('templates')->$name === null) {
+            return "Undefined Template: $name"; // TODO QA: is it necessary to consider this an error?
+        }
+
+        return true;
+    }
+
+    /**
+     * Deletes an existing Template
+     *
+     * @param string $name
+     *
+     * @see SystemMigrations::hookTemplateDeleted()
+     */
+    protected function deleteTemplate($name)
+    {
+        wire('templates')->delete($name);
     }
 }
