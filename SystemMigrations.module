@@ -37,6 +37,11 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     protected $group_data = array();
 
     /**
+     * @var array list of Fieldgroup context data at the time of loading
+     */
+    protected $context_data = array();
+
+    /**
      * @var array list of Template properties and settings at the time of loading
      */
     protected $template_data = array();
@@ -87,6 +92,9 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         // Record changes to FieldGroups:
         $this->addHookAfter('Fieldgroups::load', $this, 'hookFieldgroupLoaded');
         $this->addHookAfter('Fieldgroups::saved', $this, 'hookFieldgroupSaved');
+        $this->addHookAfter('Fieldgroups::added', $this, 'hookFieldgroupAdded');
+        $this->addHookAfter('Fieldgroups::deleted', $this, 'hookFieldgroupDeleted');
+        $this->addHookAfter('Fields::saveFieldgroupContext', $this, 'hookFieldgroupContextSaved');
 
         // Record changes to Templates:
         $this->addHookAfter('Templates::load', $this, 'hookTemplateLoaded');
@@ -312,12 +320,32 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     }
 
     /**
-     * Extract Fieldgroup name and field context data
+     * Extract Fieldgroup name and the order of the Fields
      *
      * @param Fieldgroup $group
      * @return array
      */
     protected function getGroupData(Fieldgroup $group)
+    {
+        $order = array();
+
+        foreach ($group as $field) {
+            $order[] = $field->name;
+        }
+
+        return array(
+            'name' => $group->name,
+            'order' => $order,
+        );
+    }
+
+    /**
+     * Extract Fieldgroup context data
+     *
+     * @param Fieldgroup $group
+     * @return array
+     */
+    protected function getGroupContextData(Fieldgroup $group)
     {
         $fieldContexts = array();
 
@@ -607,7 +635,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
      * @param HookEvent $event
      *
      * @see WireSaveableItems::___load()
-     * @see Fields::___load()
+     * @see Fieldgroups::___load()
      */
     public function hookFieldgroupLoaded(HookEvent $event)
     {
@@ -623,13 +651,14 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
 
         foreach ($groups as $group) {
             $this->group_data[$group->id] = $this->getGroupData($group);
+            $this->context_data[$group->id] = $this->getGroupContextData($group);
         }
     }
 
     /**
      * @param HookEvent $event
      *
-     * @see Fields::___saved()
+     * @see Fieldgroups::___saved()
      */
     public function hookFieldgroupSaved(HookEvent $event)
     {
@@ -641,44 +670,80 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
             return; // not recording
         }
 
-        $field = $event->argumentsByName('item');
+        $group = $event->argumentsByName('item');
 
-        $new_data = $this->getFieldData($field);
+        $new_data = $this->getGroupData($group);
 
-        $old_data = $this->field_data[$field->id];
+        $old_data = $this->group_data[$group->id];
 
         $updated = array();
 
-        $removed = array();
-
-        foreach ($old_data as $name => $value) {
-            if (array_key_exists($name, $new_data) && $value != $new_data[$name]) {
-                $updated[$name] = $new_data[$name];
-            }
-        }
-
-        foreach ($new_data as $name => $value) {
-            if (array_key_exists($name, $old_data)) {
-                if ($value != $old_data[$name]) {
-                    $updated[$name] = $value;
-                }
-            } else {
-                if (!empty($old_data[$name])) {
-                    $removed[] = $name;
-                }
+        foreach ($new_data as $name => $new_value) {
+            if ($old_data[$name] != $new_value) {
+                $updated[$name] = $new_value;
             }
         }
 
         if (count($updated)) {
             $this->record(
-                'updateField',
+                'updateGroup',
                 array(
                     'name' => $old_data['name'],
                     'updated' => $updated,
-                    'removed' => $removed,
                 )
             );
         }
     }
 
+    /**
+     * @param HookEvent $event
+     *
+     * @see Fieldgroups::___added()
+     */
+    public function hookFieldgroupAdded(HookEvent $event)
+    {
+        if (! $this->recording) {
+            return; // not recording
+        }
+
+        // TODO
+    }
+
+    /**
+     * @param HookEvent $event
+     *
+     * @see Fieldgroups::___deleted()
+     */
+    public function hookFieldgroupDeleted(HookEvent $event)
+    {
+        if (! $this->recording) {
+            return; // not recording
+        }
+
+        // TODO
+    }
+
+    /**
+     * @param HookEvent $event
+     *
+     * @see Fields::___saveFieldgroupContext()
+     */
+    public function hookFieldgroupContextSaved(HookEvent $event)
+    {
+        /**
+         * @var Field $field
+         * @var Fieldgroup $fieldgroup
+         */
+
+        if (! $this->recording) {
+            return; // not recording
+        }
+
+        $field = $event->argumentsByName('field');
+
+        $fieldgroup = $event->argumentsByName('fieldgroup');
+
+        // TODO
+
+    }
 }

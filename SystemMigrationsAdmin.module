@@ -244,7 +244,7 @@ class SystemMigrationsAdmin extends Process
      */
     protected function canUpdateField($name, array $updated, array $removed)
     {
-        if (wire('fields')->$name === null) {
+        if (! wire('fields')->has($name)) {
             return "Undefined Field: $name";
         }
 
@@ -271,7 +271,7 @@ class SystemMigrationsAdmin extends Process
          * @var Field $field
          */
 
-        $field = wire('fields')->$name;
+        $field = wire('fields')->get($name);
 
         foreach ($updated as $name => $value) {
             $field->$name = $value;
@@ -294,7 +294,7 @@ class SystemMigrationsAdmin extends Process
      */
     protected function canAddField($name, $type, array $data)
     {
-        if (wire('fields')->$name) {
+        if (wire('fields')->has($name)) {
             return "Field already exists: $name";
         }
 
@@ -337,7 +337,7 @@ class SystemMigrationsAdmin extends Process
      */
     protected function canDeleteField($name)
     {
-        if (wire('fields')->$name === null) {
+        if (! wire('fields')->has($name)) {
             return "Undefined Field: $name"; // TODO QA: is it necessary to consider this an error?
         }
 
@@ -367,13 +367,13 @@ class SystemMigrationsAdmin extends Process
          * @var Field $field
          */
 
-        $field = wire('fields')->$name;
+        $field = wire('fields')->get($name);
 
         if ($field === null) {
             return "Undefined Field: $name";
         }
 
-        if (wire('fieldtypes')->get($type) === null) {
+        if (! wire('fieldtypes')->has($type)) {
             return "Unknown FieldType: $type";
         }
 
@@ -396,7 +396,7 @@ class SystemMigrationsAdmin extends Process
          * @var Field $field
          */
 
-        $field = wire('fields')->$name;
+        $field = wire('fields')->get($name);
 
         $field->setFieldtype($type);
 
@@ -411,7 +411,7 @@ class SystemMigrationsAdmin extends Process
      */
     protected function canAddTemplate($name, array $data)
     {
-        if (wire('templates')->$name) {
+        if (wire('templates')->has($name)) {
             return "Template already exists: $name";
         }
 
@@ -451,7 +451,7 @@ class SystemMigrationsAdmin extends Process
      */
     protected function canUpdateTemplate($name, array $updated, array $removed)
     {
-        if (wire('templates')->$name) {
+        if (wire('templates')->has($name)) {
             return true;
         }
 
@@ -473,7 +473,7 @@ class SystemMigrationsAdmin extends Process
          * @var Template $template
          */
 
-        $template = wire('templates')->$name;
+        $template = wire('templates')->get(name);
 
         foreach ($updated as $name => $value) {
             $template->$name = $value;
@@ -489,13 +489,13 @@ class SystemMigrationsAdmin extends Process
     /**
      * @param string $name
      *
-     * @return bool
+     * @return bool|string
      *
      * @see SystemMigrations::hookTemplateDeleted()
      */
     protected function canDeleteTemplate($name)
     {
-        if (wire('templates')->$name === null) {
+        if (! wire('templates')->has($name)) {
             return "Undefined Template: $name"; // TODO QA: is it necessary to consider this an error?
         }
 
@@ -512,5 +512,51 @@ class SystemMigrationsAdmin extends Process
     protected function deleteTemplate($name)
     {
         wire('templates')->delete($name);
+    }
+
+    /**
+     * @param string $name
+     * @param array  $updated
+     *
+     * @return bool|string
+     *
+     * @see SystemMigrations::hookFieldgroupSaved()
+     */
+    protected function canUpdateGroup($name, $updated)
+    {
+        if (! wire('fieldgroups')->has($name)) {
+            return "Undefined Fieldgroup: $name";
+        }
+
+        return true;
+    }
+
+    /**
+     * @param string $name
+     * @param array $updated
+     *
+     * @see SystemMigrations::hookFieldgroupSaved()
+     */
+    protected function updateGroup($name, $updated)
+    {
+        /**
+         * @var Fieldgroup $group
+         */
+
+        $group = wire('fieldgroups')->get($name);
+
+        if (isset($updated['name'])) {
+            $group->name = $updated['name'];
+        }
+
+        if (isset($updated['order'])) {
+            foreach ($updated['order'] as $name) {
+                $field = $group->getField($name, true);
+
+                $group->append($field); // appending items to a WireArray will re-order items (won't create duplicates)
+            }
+        }
+
+        $group->save();
     }
 }
