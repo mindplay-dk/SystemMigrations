@@ -420,19 +420,25 @@ class SystemMigrationsAdmin extends Process
 
     /**
      * @param string $name
+     * @param string $fieldgroup_name
      * @param array $data
      *
      * @see SystemMigrations::hookTemplateAdded()
      */
-    protected function addTemplate($name, array $data)
+    protected function addTemplate($name, $fieldgroup_name, array $data)
     {
         /**
          * @var Fields $templates
+         * @var Fieldgroup $fieldgroup
          */
 
         $template = new Template();
 
         $template->name = $name;
+
+        $fieldgroup = wire('fieldgroups')->get($fieldgroup_name);
+
+        $template->setFieldgroup($fieldgroup);
 
         foreach ($data as $name => $value) {
             $template->$name = $value;
@@ -558,6 +564,52 @@ class SystemMigrationsAdmin extends Process
         }
 
         $group->save();
+    }
+
+    /**
+     * @param string $name
+     * @param array $data
+     *
+     * @return bool|string
+     */
+    protected function canAddGroup($name, $data)
+    {
+        if (wire('fieldgroups')->has($name)) {
+            return "Fieldgroup already exists: $name";
+        }
+
+        return true;
+    }
+
+    /**
+     * @param string $name
+     * @param array $data
+     */
+    protected function addGroup($name, $data)
+    {
+        $this->updateGroup($name, $data);
+    }
+
+    /**
+     * @param string $name
+     *
+     * @return bool|string
+     */
+    protected function canDeleteGroup($name)
+    {
+        if (! wire('fieldgroups')->has($name)) {
+            return "Undefined Template: $name"; // TODO QA: is it necessary to consider this an error?
+        }
+
+        return true;
+    }
+
+    /**
+     * @param string $name
+     */
+    protected function deleteGroup($name)
+    {
+        wire('fieldgroups')->delete($name);
     }
 
     /**
