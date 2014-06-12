@@ -132,6 +132,35 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     }
 
     /**
+     * Check and report changes between two versions of a set of values
+     *
+     * @param array $old
+     * @param array $new
+     * @param array &$updated
+     * @param string[] &$removed
+     *
+     * @return bool
+     */
+    protected function checkChanges($old, $new, &$updated, &$removed) {
+        $updated = array();
+        $removed = array();
+
+        foreach ($new as $name => $value) {
+            if (! array_key_exists($name, $old) || $old[$name] != $value) {
+                $updated[$name] = $new[$name];
+            }
+        }
+
+        foreach ($old as $name => $value) {
+            if (! array_key_exists($name, $new)) {
+                $removed[] = $name;
+            }
+        }
+
+        return count($updated) > 0 || count($removed) > 0;
+    }
+
+    /**
      * @param HookEvent $event
      *
      * @see WireSaveableItems::___load()
@@ -175,29 +204,33 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         
         $old_data = $this->field_data[$field->id];
 
-        $updated = array();
+//        $updated = array();
+//
+//        $removed = array();
+//
+//        foreach ($old_data as $name => $value) {
+//            if (array_key_exists($name, $new_data) && $value != $new_data[$name]) {
+//                $updated[$name] = $new_data[$name];
+//            }
+//        }
+//
+//        foreach ($new_data as $name => $value) {
+//            if (array_key_exists($name, $old_data)) {
+//                if ($value != $old_data[$name]) {
+//                    $updated[$name] = $value;
+//                }
+//            } else {
+//                if (!empty($old_data[$name])) {
+//                    $removed[] = $name;
+//                }
+//            }
+//        }
 
-        $removed = array();
+        $changed = $this->checkChanges($old_data, $new_data, $updated, $removed);
 
-        foreach ($old_data as $name => $value) {
-            if (array_key_exists($name, $new_data) && $value != $new_data[$name]) {
-                $updated[$name] = $new_data[$name];
-            }
-        }
+        //var_dump(compact('old_data', 'new_data', 'updated', 'removed')); die();
 
-        foreach ($new_data as $name => $value) {
-            if (array_key_exists($name, $old_data)) {
-                if ($value != $old_data[$name]) {
-                    $updated[$name] = $value;
-                }
-            } else {
-                if (!empty($old_data[$name])) {
-                    $removed[] = $name;
-                }
-            }
-        }
-
-        if (count($updated)) {
+        if ($changed) {
             $this->record(
                 'updateField',
                 array(
@@ -292,20 +325,24 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
      */
     protected function getFieldData(Field $field)
     {
+        $empty_field = new Field();
+
         $data = array();
 
         foreach ($field as $name => $value) {
-            $data[$name] = $value;
+            if ($empty_field->has($name) && $empty_field->get($name) !== $value) {
+                $data[$name] = $value;
+            }
         }
-        
+
         $settings = $field->getTableData();
-        
+
         unset($settings['data'], $settings['type'], $settings['prevTable'], $settings['prevFieldtype']);
-        
+
         foreach ($settings as $name => $value) {
             $data[$name] = $value;
         }
-        
+
         $data['name'] = $field->name;
 
         // IDs cannot change and are not interesting to us:
@@ -347,16 +384,13 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
      */
     protected function getGroupContextData(Fieldgroup $group)
     {
-        $fieldContexts = array();
+        $contexts = array();
 
         foreach ($group as $field) {
-            $fieldContexts[$field->id] = $group->getFieldContextArray($field->id);
+            $contexts[$field->name] = $group->getFieldContextArray($field->id);
         }
 
-        return array(
-            'name' => $group->name,
-            'fieldContexts' => $fieldContexts,
-        );
+        return $contexts;
     }
 
     /**
@@ -420,33 +454,37 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
 
         $template = $event->argumentsByName('item');
 
-        $old_data = $this->template_data[$template->id];
+        $old_data = array_filter($this->template_data[$template->id]);
 
-        $new_data = $this->getTemplateData($template);
+        $new_data = array_filter($this->getTemplateData($template));
 
-        $updated = array();
+//        $updated = array();
+//
+//        $removed = array();
+//
+//        foreach ($old_data as $name => $value) {
+//            if (array_key_exists($name, $new_data) && $value != $new_data[$name]) {
+//                $updated[$name] = $new_data[$name];
+//            }
+//        }
+//
+//        foreach ($new_data as $name => $value) {
+//            if (array_key_exists($name, $old_data)) {
+//                if ($value != $old_data[$name]) {
+//                    $updated[$name] = $value;
+//                }
+//            } else {
+//                if (!empty($old_data[$name])) {
+//                    $removed[] = $name;
+//                }
+//            }
+//        }
 
-        $removed = array();
+        $changed = $this->checkChanges($old_data, $new_data, $updated, $removed);
 
-        foreach ($old_data as $name => $value) {
-            if (array_key_exists($name, $new_data) && $value != $new_data[$name]) {
-                $updated[$name] = $new_data[$name];
-            }
-        }
+        //var_dump(compact('old_data','new_data','updated','removed')); die();
 
-        foreach ($new_data as $name => $value) {
-            if (array_key_exists($name, $old_data)) {
-                if ($value != $old_data[$name]) {
-                    $updated[$name] = $value;
-                }
-            } else {
-                if (!empty($old_data[$name])) {
-                    $removed[] = $name;
-                }
-            }
-        }
-
-        if (count($updated)) {
+        if ($changed) {
             $this->record(
                 'updateTemplate',
                 array(
@@ -732,7 +770,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     {
         /**
          * @var Field $field
-         * @var Fieldgroup $fieldgroup
+         * @var Fieldgroup $group
          */
 
         if (! $this->recording) {
@@ -741,9 +779,69 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
 
         $field = $event->argumentsByName('field');
 
-        $fieldgroup = $event->argumentsByName('fieldgroup');
+        $group = $event->argumentsByName('fieldgroup');
 
-        // TODO
+        $old_contexts = $this->context_data[$group->id];
 
+        $new_contexts = $this->getGroupContextData($group);
+
+        // context data doesn't get updated in the model, so we need to collect any
+        // updated context-relevant properties from the field itself:
+
+//        foreach ($new_contexts as $field_name => $values) {
+//            foreach ($values as $name => $value) {
+//                $new_contexts[$field_name][$name] = $field->get($name);
+//            }
+//        }
+
+        $updated = array();
+
+        $removed = array();
+
+        foreach ($new_contexts as $field_name => $new_context) {
+            $updated[$field_name] = array();
+            $removed[$field_name] = array();
+
+            $old_context = $old_contexts[$field_name];
+
+//            foreach ($old_context as $name => $value) {
+//                if (array_key_exists($name, $new_context) && $value != $new_context[$name]) {
+//                    $updated[$field_name][$name] = $new_context[$name];
+//                }
+//            }
+//
+//            foreach ($new_context as $name => $value) {
+//                if (! array_key_exists($name, $old_context) || $value != $old_context[$name]) {
+//                    $updated[$field_name][$name] = $value;
+//                } else {
+//                    if (!empty($old_context[$name])) {
+//                        $removed[$field_name][] = $name;
+//                    }
+//                }
+//            }
+
+            $this->checkChanges($old_context, $new_context, $updated[$field_name], $removed[$field_name]);
+
+            if (count($updated[$field_name]) === 0) {
+                unset($updated[$field_name]); // no updates
+            }
+
+            if (count($removed[$field_name]) === 0) {
+                unset($removed[$field_name]); // no removals
+            }
+        }
+
+        //var_dump(array('name' => $group->name), compact('old_contexts', 'new_contexts', 'updated', 'removed')); die();
+
+        if (count($updated) || count($removed)) {
+            $this->record(
+                'updateGroupContext',
+                array(
+                    'name' => $group->name,
+                    'updated' => $updated,
+                    'removed' => $removed,
+                )
+            );
+        }
     }
 }
