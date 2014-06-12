@@ -559,4 +559,73 @@ class SystemMigrationsAdmin extends Process
 
         $group->save();
     }
+
+    /**
+     * @param string $name
+     * @param array $updated
+     * @param array $removed
+     *
+     * @return bool|string
+     *
+     * @see SystemMigrations::hookFieldgroupContextSaved()
+     */
+    protected function canUpdateGroupContext($name, $updated, $removed)
+    {
+        /**
+         * @var Fieldgroup $group
+         * @var Field $field
+         */
+
+        if (! wire('fieldgroups')->has($name)) {
+            return "Missing Fieldgroup: $name";
+        }
+
+        return true;
+    }
+
+    /**
+     * @param string $name
+     * @param array $updated
+     * @param array $removed
+     *
+     * @see SystemMigrations::hookFieldgroupContextSaved()
+     */
+    protected function updateGroupContext($name, $updated, $removed)
+    {
+        /**
+         * @var Fieldgroup $group
+         * @var Field $field
+         * @var Field[] $fields
+         */
+
+        $group = wire('fieldgroups')->get($name);
+
+        $fields = array();
+
+        foreach ($updated as $field_name => $values) {
+            $field = $group->getField($field_name, true);
+
+            foreach ($values as $name => $value) {
+                $field->set($name, $value);
+            }
+
+            $fields[$field_name] = $field;
+        }
+
+        foreach ($removed as $field_name => $names) {
+            $field = @$fields[$field_name] ?: $group->getField($field_name, true);
+
+            $base_field = wire('fields')->get($field->id);
+
+            foreach ($names as $name) {
+                $field->set($name, $base_field->get($name));
+            }
+
+            $fields[$field_name] = $field;
+        }
+
+        foreach ($fields as $name => $field) {
+            wire('fields')->saveFieldgroupContext($field, $group);
+        }
+    }
 }
