@@ -391,6 +391,15 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         unset($settings['data']);
         $data = array_merge($settings, $data);
 
+        // filter default values:
+        $empty_template = new Template();
+
+        foreach ($data as $name => $value) {
+            if ($empty_template->get($name) == $value) {
+                unset($data[$name]);
+            }
+        }
+
         // include template name in data:
         $data['name'] = $template->name;
 
@@ -444,9 +453,9 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
             return; // new Template added - this will be handled by hookTemplateAdded()
         }
 
-        $old_data = array_filter($this->template_data[$template->id]);
+        $old_data = $this->template_data[$template->id];
 
-        $new_data = array_filter($this->getTemplateData($template));
+        $new_data = $this->getTemplateData($template);
 
         $changed = $this->checkChanges($old_data, $new_data, $updated, $removed);
 
