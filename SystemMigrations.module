@@ -208,31 +208,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         
         $old_data = $this->field_data[$field->id];
 
-//        $updated = array();
-//
-//        $removed = array();
-//
-//        foreach ($old_data as $name => $value) {
-//            if (array_key_exists($name, $new_data) && $value != $new_data[$name]) {
-//                $updated[$name] = $new_data[$name];
-//            }
-//        }
-//
-//        foreach ($new_data as $name => $value) {
-//            if (array_key_exists($name, $old_data)) {
-//                if ($value != $old_data[$name]) {
-//                    $updated[$name] = $value;
-//                }
-//            } else {
-//                if (!empty($old_data[$name])) {
-//                    $removed[] = $name;
-//                }
-//            }
-//        }
-
         $changed = $this->checkChanges($old_data, $new_data, $updated, $removed);
-
-        //var_dump(compact('old_data', 'new_data', 'updated', 'removed')); die();
 
         if ($changed) {
             $this->record(
@@ -473,31 +449,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
 
         $new_data = array_filter($this->getTemplateData($template));
 
-//        $updated = array();
-//
-//        $removed = array();
-//
-//        foreach ($old_data as $name => $value) {
-//            if (array_key_exists($name, $new_data) && $value != $new_data[$name]) {
-//                $updated[$name] = $new_data[$name];
-//            }
-//        }
-//
-//        foreach ($new_data as $name => $value) {
-//            if (array_key_exists($name, $old_data)) {
-//                if ($value != $old_data[$name]) {
-//                    $updated[$name] = $value;
-//                }
-//            } else {
-//                if (!empty($old_data[$name])) {
-//                    $removed[] = $name;
-//                }
-//            }
-//        }
-
         $changed = $this->checkChanges($old_data, $new_data, $updated, $removed);
-
-        //var_dump(compact('old_data','new_data','updated','removed')); die();
 
         if ($changed) {
             $this->record(
@@ -840,15 +792,6 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
 
         $new_contexts = $this->getGroupContextData($group);
 
-        // context data doesn't get updated in the model, so we need to collect any
-        // updated context-relevant properties from the field itself:
-
-//        foreach ($new_contexts as $field_name => $values) {
-//            foreach ($values as $name => $value) {
-//                $new_contexts[$field_name][$name] = $field->get($name);
-//            }
-//        }
-
         $updated = array();
 
         $removed = array();
@@ -858,22 +801,6 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
             $removed[$field_name] = array();
 
             $old_context = $old_contexts[$field_name];
-
-//            foreach ($old_context as $name => $value) {
-//                if (array_key_exists($name, $new_context) && $value != $new_context[$name]) {
-//                    $updated[$field_name][$name] = $new_context[$name];
-//                }
-//            }
-//
-//            foreach ($new_context as $name => $value) {
-//                if (! array_key_exists($name, $old_context) || $value != $old_context[$name]) {
-//                    $updated[$field_name][$name] = $value;
-//                } else {
-//                    if (!empty($old_context[$name])) {
-//                        $removed[$field_name][] = $name;
-//                    }
-//                }
-//            }
 
             $this->checkChanges($old_context, $new_context, $updated[$field_name], $removed[$field_name]);
 
@@ -885,8 +812,6 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
                 unset($removed[$field_name]); // no removals
             }
         }
-
-        //var_dump(array('name' => $group->name), compact('old_contexts', 'new_contexts', 'updated', 'removed')); die();
 
         if (count($updated) || count($removed)) {
             $this->record(
