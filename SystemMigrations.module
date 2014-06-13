@@ -309,27 +309,26 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
      */
     protected function getFieldData(Field $field)
     {
+        $settings = $field->getTableData();
+
+        // pull ['data'] from $settings and merge it's contents into $data :
+        $data = $settings['data'];
+        unset($settings['data'], $settings['type'], $settings['prevTable'], $settings['prevFieldtype']);
+        $data = array_merge($settings, $data);
+
+        // filter default values:
         $empty_field = new Field();
 
-        $data = array();
-
-        foreach ($field as $name => $value) {
-            if ($empty_field->has($name) && $empty_field->get($name) !== $value) {
-                $data[$name] = $value;
+        foreach ($data as $name => $value) {
+            if ($empty_field->get($name) == $value) {
+                unset($data[$name]);
             }
         }
 
-        $settings = $field->getTableData();
-
-        unset($settings['data'], $settings['type'], $settings['prevTable'], $settings['prevFieldtype']);
-
-        foreach ($settings as $name => $value) {
-            $data[$name] = $value;
-        }
-
+        // add the Field name:
         $data['name'] = $field->name;
 
-        // IDs cannot change and are not interesting to us:
+        // IDs are system-specific, can change, and are not interesting to us:
         unset($data['id']);
         
         // ignore default columnWidth if set - see Fields::___saveFieldgroupContext()
