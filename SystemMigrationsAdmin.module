@@ -8,6 +8,12 @@ class SystemMigrationsAdmin extends Process
     const PAGE_NAME = 'migrations';
 
     /**
+     * @var string path to data files
+     * @see init()
+     */
+    protected $data_path;
+
+    /**
      * @return array module information
      */
     public static function getModuleInfo()
@@ -31,7 +37,7 @@ class SystemMigrationsAdmin extends Process
      */
     public function init()
     {
-        $this->data_path = wire('modules')->SystemMigrations->data_path;
+        $this->data_path = $this->getModule()->data_path;
     }
 
     /**
@@ -53,26 +59,26 @@ class SystemMigrationsAdmin extends Process
 
         $fast_forward = true;
 
-        foreach ($this->getMigrations() as $filename => $installed) {
-            if ($fast_forward && $installed) {
+        foreach ($this->getMigrations() as $filename => $remaining) {
+            if ($fast_forward && $remaining === 0) {
                 continue; // fast foward past already installed migrations
             } else {
                 $fast_forward = false;
             }
 
             if (++$count > $max) {
-                $html .= "<pre>  More than $max migrations in registry...</pre>\n";
+                $html .= "<pre>  More than $max pending migrations in the registry...</pre>\n";
                 break;
             }
 
-            $migration_data = $this->loadMigration($filename);
+            $commands = $this->loadCommands($filename);
 
-            $html .= "<pre>" . ($installed ? '  ' : '* ') . htmlspecialchars($filename) . ' ' . htmlspecialchars($this->describe($migration_data));
+            $html .= "<pre>" . ($remaining ? '  ' : '* ') . htmlspecialchars($filename) . ' ' . htmlspecialchars($this->describe($commands));
 
-            if (($installed === false) && $first) {
+            if (($remaining > 0) && $first) {
                 $first = false;
 
-                $status = $this->canApply($migration_data);
+                $status = $this->canApplyCommand($commands[count($commands) - $remaining]);
 
                 $html .= " <- " . ($status === true ? "READY" : $status);
 
@@ -95,6 +101,14 @@ class SystemMigrationsAdmin extends Process
     }
 
     /**
+     * @return SystemMigrations
+     */
+    protected function getModule()
+    {
+        return wire('modules')->get('SystemMigrations');
+    }
+
+    /**
      * Apply migrations
      */
     public function ___executeApply()
@@ -103,29 +117,36 @@ class SystemMigrationsAdmin extends Process
          * @var SystemMigrations $module
          */
 
-        $module = wire('modules')->get('SystemMigrations');
+        $module = $this->getModule();
 
-        $module->recording = false; // disable recording while we repeat pending changes
+        $module->recording = false; // disable recording while we apply pending changes
 
         $html = '<h2>Apply Migrations</h2>';
 
-        foreach ($this->getMigrations() as $filename => $installed) {
-            if ($installed === false) {
-                $migration_data = $this->loadMigration($filename);
+        foreach ($this->getMigrations() as $filename => $remaining) {
+            if ($remaining > 0) {
+                $commands = $this->loadCommands($filename);
 
-                $status = $this->canApply($migration_data);
+                $total = count($commands);
 
-                if ($status === true) {
-                    $html .= '<pre>Applying ' . $filename . '</pre>';
+                for ($index = $total - $remaining; $index < $total; $index++) {
+                    $command = $commands[$index];
 
-                    $this->apply($migration_data);
+                    $status = $this->canApplyCommand($command);
 
-                    $module->recordAppliedMigration($filename);
-                } else {
-                    $html .= '<pre>Aborted ' . $filename . ' : ' . htmlspecialchars($status) . '</pre>';
+                    if ($status === true) {
+                        $html .= '<pre>Applying ' . $filename . '</pre>';
 
-                    break; // break out of for-each loop
+                        call_user_func_array(array($this, $command['method']), $command['params']);
+
+                        $module->recordAppliedMigration($filename, $total - 1 - $index);
+                    } else {
+                        $html .= '<pre>Aborted ' . $filename . ' : ' . htmlspecialchars($status) . '</pre>';
+
+                        break 2; // break out of the for and foreach loops
+                    }
                 }
+
             }
         }
 
@@ -164,20 +185,24 @@ class SystemMigrationsAdmin extends Process
         }
     }
 
+    /**
+     * @return ArrayObject|int[] map where filename => remaining number of commands not yet applied
+     */
     public function getMigrations()
     {
-        return wire('modules')->SystemMigrations->getMigrations();
+        return $this->getModule()->getMigrations();
     }
 
     /**
-     * Load data from a migration file
+     * Load commands from a JSON migration file
      *
-     * @param string $migration_filename
+     * @param string $filename
+     *
      * @return array
      */
-    protected function loadMigration($migration_filename)
+    protected function loadCommands($filename)
     {
-        return json_decode(file_get_contents($this->data_path . DIRECTORY_SEPARATOR . $migration_filename), true);
+        return json_decode(file_get_contents($this->data_path . DIRECTORY_SEPARATOR . $filename), true);
     }
 
     /**
@@ -204,36 +229,23 @@ class SystemMigrationsAdmin extends Process
     }
 
     /**
-     * @param array $migration_data
+     * @param array $command
+     *
      * @return bool|string
      */
-    public function canApply($migration_data)
+    public function canApplyCommand($command)
     {
-        if (!is_array($migration_data) || count($migration_data) === 0) {
-            return 'Invalid migration file';
+        if (!is_array($command)) {
+            return 'Invalid command';
         }
 
-        foreach ($migration_data as $data) {
-            $fn = 'can' . ucfirst($data['method']);
+        $fn = 'can' . ucfirst($command['method']);
 
-            if (! (method_exists($this, $fn) && method_exists($this, $data['method']))) {
-                return 'Unsupported migration type: ' . $data['method'];
-            }
-
-            break; // can only validate the first migration
+        if (! (method_exists($this, $fn) && method_exists($this, $command['method']))) {
+            return 'Unsupported migration type: ' . $command['method'];
         }
 
-        return call_user_func_array(array($this, $fn), $data['params']);
-    }
-
-    /**
-     * @param array migration data
-     */
-    public function apply($migration_data)
-    {
-        foreach ($migration_data as $data) {
-            call_user_func_array(array($this, $data['method']), $data['params']);
-        }
+        return call_user_func_array(array($this, $fn), $command['params']);
     }
 
     /**
@@ -407,11 +419,12 @@ class SystemMigrationsAdmin extends Process
 
     /**
      * @param string $name
+     * @param string $fieldgroup_name
      * @param array $data
      *
      * @return bool|string
      */
-    protected function canAddTemplate($name, array $data)
+    protected function canAddTemplate($name, $fieldgroup_name, array $data)
     {
         if (wire('templates')->has($name)) {
             return "Template already exists: $name";

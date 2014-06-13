@@ -244,6 +244,8 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
                 )
             );
         }
+
+        $this->field_data[$field->id] = $new_data;
     }
 
     /**
@@ -264,6 +266,8 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         $field = $event->argumentsByName('item');
 
         $data = $this->getFieldData($field);
+
+        $this->field_data[$field->id] = $data;
 
         $name = $data['name'];
 
@@ -587,7 +591,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     /**
      * Get the list of migrations available on this system
      *
-     * @return ArrayObject map where filename => true/false (applied or not applied)
+     * @return ArrayObject|int[] map where filename => remaining number of commands not yet applied
      */
     public function getMigrations()
     {
@@ -607,23 +611,23 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
     /**
      * Load the list of migrations available on this system
      *
-     * @return ArrayObject
+     * @return ArrayObject|int[] map where filename => remaining number of commands not yet applied
      */
     protected function loadMigrations()
     {
-        /** @var bool[] $migrations */
-        $migrations = array();
+        /** @var int[] $registry */
+        $registry = array();
 
         $registry_path = $this->data_path . DIRECTORY_SEPARATOR . self::REGISTRY_FILENAME;
 
         if (file_exists($registry_path)) {
             // load registry:
-            $migrations = json_decode(file_get_contents($registry_path), true);
+            $registry = json_decode(file_get_contents($registry_path), true);
 
             // sanitize the registry:
-            foreach ($migrations as $existing_filename => $installed) {
+            foreach ($registry as $existing_filename => $remaining) {
                 if (! file_exists($this->data_path . DIRECTORY_SEPARATOR . $existing_filename)) {
-                    unset($migrations[$existing_filename]); // physical file has been removed
+                    unset($registry[$existing_filename]); // physical file has been removed
                 }
             }
         }
@@ -632,26 +636,28 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         foreach (glob($this->data_path.'/*.json') as $migration_path) {
             $migration_filename = basename($migration_path);
 
-            if (! array_key_exists($migration_filename, $migrations)) {
-                $migrations[ $migration_filename ] = false; // physical file detected - add to registry
+            if (! array_key_exists($migration_filename, $registry)) {
+                // physical file detected - add number of commands to the registry:
+                $registry[ $migration_filename ] = count(json_decode(file_get_contents($migration_path), true));
             }
         }
 
-        return new ArrayObject($migrations);
+        return new ArrayObject($registry);
     }
 
     /**
      * Flag a specified migration-file as having been applied to this system
      *
      * @param string $filename
+     * @param int $remaining number of commands remaining to apply
      */
-    public function recordAppliedMigration($filename)
+    public function recordAppliedMigration($filename, $remaining)
     {
         // record applied migration:
 
         $registry = $this->getMigrations();
 
-        $registry[$filename] = true;
+        $registry[$filename] = $remaining;
 
         file_put_contents(
             /* $filename: */ $this->data_path . DIRECTORY_SEPARATOR . self::REGISTRY_FILENAME,
@@ -679,7 +685,7 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
                 json_encode($this->recorded)
             );
             
-            $this->recordAppliedMigration($filename);
+            $this->recordAppliedMigration($filename, 0);
         }
 
         $this->recorded = array();
