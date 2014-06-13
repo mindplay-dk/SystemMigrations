@@ -73,14 +73,22 @@ class SystemMigrationsAdmin extends Process
 
             $commands = $this->loadCommands($filename);
 
-            $html .= "<pre>" . ($remaining ? '  ' : '* ') . htmlspecialchars($filename) . ' ' . htmlspecialchars($this->describe($commands));
+            $first_index = count($commands) - $remaining;
 
-            if (($remaining > 0) && $first) {
-                $first = false;
+            foreach ($commands as $index => $command) {
+                $pending = $index >= $first_index;
 
-                $status = $this->canApplyCommand($commands[count($commands) - $remaining]);
+                $html .= "<pre>" . ($pending ? '  ' : '* ')
+                    . htmlspecialchars($filename) . ' [' . (1 + $index) . '] '
+                    . htmlspecialchars($this->describeCommand($command));
 
-                $html .= " <- " . ($status === true ? "READY" : $status);
+                if ($pending && $first) {
+                    $first = false;
+
+                    $status = $this->canApplyCommand($commands[count($commands) - $remaining]);
+
+                    $html .= " <- " . ($status === true ? "READY" : $status);
+                }
 
                 $html .= "</pre>\n";
             }
@@ -135,7 +143,9 @@ class SystemMigrationsAdmin extends Process
                     $status = $this->canApplyCommand($command);
 
                     if ($status === true) {
-                        $html .= '<pre>Applying ' . $filename . '</pre>';
+                        $html .= '<pre>Applying '
+                            . $filename . ' [' . (1 + $index) . ']: '
+                            . $this->describeCommand($command) . '</pre>';
 
                         call_user_func_array(array($this, $command['method']), $command['params']);
 
@@ -206,26 +216,23 @@ class SystemMigrationsAdmin extends Process
     }
 
     /**
-     * @param array $migration_data
+     * @param array $command
+     *
      * @return string a description of the migration contained in the given migration file
      */
-    public function describe($migration_data)
+    public function describeCommand($command)
     {
         $strings = array();
 
-        foreach ($migration_data as $data) {
-            $string = array();
-
-            foreach ($data['params'] as $name => $value) {
-                if (is_scalar($value)) {
-                    $string[] = $name . ':' . strval($value);
-                }
-            }
-
-            $strings[] = $data['method'] . '(' . implode(' ', $string) . ')';
+        foreach ($command['params'] as $name => $value) {
+            $strings[] = is_scalar($value)
+                ? $name . ':' . strval($value)
+                : $name;
         }
 
-        return implode(', ', $strings);
+        return count($strings)
+            ? $command['method'] . '(' . implode(', ', $strings) . ')'
+            : $command['method'];
     }
 
     /**
