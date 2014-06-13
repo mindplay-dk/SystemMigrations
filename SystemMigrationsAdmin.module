@@ -553,13 +553,22 @@ class SystemMigrationsAdmin extends Process
 
         $group = wire('fieldgroups')->get($name);
 
-        if (isset($updated['name'])) {
-            $group->name = $updated['name'];
+        $this->_updateGroup($group, $updated);
+    }
+
+    /**
+     * @param Fieldgroup $group
+     * @param array $data
+     */
+    protected function _updateGroup(Fieldgroup $group, $data)
+    {
+        if (isset($data['name'])) {
+            $group->name = $data['name'];
         }
 
-        if (isset($updated['order'])) {
-            foreach ($updated['order'] as $name) {
-                $field = $group->getField($name, true);
+        if (isset($data['order'])) {
+            foreach ($data['order'] as $name) {
+                $field = $group->getField($name, true) ?: wire('fields')->get($name);
 
                 $group->append($field); // appending items to a WireArray will re-order items (won't create duplicates)
             }
@@ -589,7 +598,9 @@ class SystemMigrationsAdmin extends Process
      */
     protected function addGroup($name, $data)
     {
-        $this->updateGroup($name, $data);
+        $group = new Fieldgroup();
+
+        $this->_updateGroup($group, $data);
     }
 
     /**
