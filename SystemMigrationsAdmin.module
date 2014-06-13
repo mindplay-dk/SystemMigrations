@@ -219,6 +219,8 @@ class SystemMigrationsAdmin extends Process
             if (! (method_exists($this, $fn) && method_exists($this, $data['method']))) {
                 return 'Unsupported migration type: ' . $data['method'];
             }
+
+            break; // can only validate the first migration
         }
 
         return call_user_func_array(array($this, $fn), $data['params']);
