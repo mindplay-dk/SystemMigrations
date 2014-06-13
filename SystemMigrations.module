@@ -505,6 +505,8 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
                 )
             );
         }
+
+        $this->template_data[$template->id] = $new_data;
     }
 
     /**
@@ -525,6 +527,8 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         $template = $event->argumentsByName('item');
 
         $data = $this->getTemplateData($template);
+
+        $this->template_data[$template->id] = $data;
 
         $name = $data['name'];
 
@@ -747,6 +751,8 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
                 )
             );
         }
+
+        $this->group_data[$group->id] = $new_data;
     }
 
     /**
@@ -767,6 +773,8 @@ class SystemMigrations extends WireData implements Module, ConfigurableModule
         $group = $event->argumentsByName('item');
 
         $data = $this->getGroupData($group);
+
+        $this->group_data[$group->id] = $data;
 
         $this->record(
             'addGroup',
