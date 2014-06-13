@@ -374,7 +374,13 @@ class SystemMigrationsAdmin extends Process
      */
     protected function deleteField($name)
     {
-        wire('fields')->delete($name);
+        /**
+         * @var Field $field
+         */
+
+        $field = wire('fields')->get($name);
+
+        wire('fields')->delete($field);
     }
 
     /**
@@ -539,7 +545,13 @@ class SystemMigrationsAdmin extends Process
      */
     protected function deleteTemplate($name)
     {
-        wire('templates')->delete($name);
+        /**
+         * @var Template $template
+         */
+
+        $template = wire('templates')->get($name);
+
+        wire('templates')->delete($template);
     }
 
     /**
@@ -642,7 +654,13 @@ class SystemMigrationsAdmin extends Process
      */
     protected function deleteGroup($name)
     {
-        wire('fieldgroups')->delete($name);
+        /**
+         * @var Fieldgroup $group
+         */
+
+        $group = wire('fieldgroups')->get($name);
+
+        wire('fieldgroups')->delete($group);
     }
 
     /**
